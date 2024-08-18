@@ -1,5 +1,5 @@
 
-local defaultSpells1 = {
+_G.defaultSpells1 = {
 
 	-- Mage
 	45438, --Ice Block
@@ -84,7 +84,7 @@ local defaultSpells1 = {
 
 }
 
-local defaultSpells2 = {
+_G.defaultSpells2 = {
 
 	-- Mage
 	80353, --Timewarp
@@ -140,7 +140,7 @@ local defaultSpells2 = {
 	115750, --Blinding Light
 
 	-- Warrior
-	1719, --Battle Cry
+	1719, --Recklessness
 	23920, --Spell Reflection
 	46968, --Shockwave
 	18499, --Berserker Rage
@@ -217,4 +217,5 @@ local defaultSpells2 = {
 	67867, --Trampled (ToC arena spell when you run over someone)
 
 }
+
 
