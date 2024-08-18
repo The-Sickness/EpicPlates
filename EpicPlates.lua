@@ -626,6 +626,16 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
+        -- Tooltip functionality for buffs
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HELPFUL")
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+
         UnitFrame.buffIcons[i] = {
             icon = icon,
             timer = timer
@@ -648,6 +658,16 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
+        -- Tooltip functionality for debuffs
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HARMFUL")
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+
         UnitFrame.debuffIcons[i] = {
             icon = icon,
             timer = timer
@@ -657,6 +677,7 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     -- Ensure the sizes and positions are correct after creation
     self:UpdateIconSize()
 end
+
 
 
 local function IsAuraFiltered(spellName, spellID, casterName)
