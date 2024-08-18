@@ -1,8 +1,11 @@
 -- Made by Sharpedge_Gaming
--- v1.0 - 11.0.2
+-- v1.1 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
+local LSM = LibStub("LibSharedMedia-3.0")
+local LDB = LibStub("LibDataBroker-1.1")
+local LDBIcon = LibStub("LibDBIcon-1.0")
 
 local INFO_POINT            = 'TOP'
 local INFO_RELATIVE_POINT   = 'BOTTOM'
@@ -27,18 +30,18 @@ EpicPlates.defaults = {
     profile = {
         iconSize = 20,       -- Default icon size
         timerFontSize = 10,  -- Default timer font size
+        timerFont = "Friz Quadrata TT",  -- Default font
+        timerFontColor = {1, 1, 1},  -- Default color (white)
         buffIconPositions = {},
         debuffIconPositions = {},
     },
 }
-
 local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
 local EpicPlatesTooltip = CreateFrame('GameTooltip', 'EpicPlatesTooltip', nil, 'GameTooltipTemplate')
 
 local importantSpells = defaultSpells1
 local semiImportantSpells = defaultSpells2
 
--- Function to check if a spell is important
 function EpicPlates:IsImportantSpell(spellID)
     for _, id in ipairs(importantSpells) do
         if id == spellID then
@@ -48,7 +51,6 @@ function EpicPlates:IsImportantSpell(spellID)
     return false
 end
 
--- Function to check if a spell is semi-important
 function EpicPlates:IsSemiImportantSpell(spellID)
     for _, id in ipairs(semiImportantSpells) do
         if id == spellID then
@@ -76,6 +78,69 @@ function EpicPlates:OnEnable()
     self:ScheduleRepeatingTimer("UpdateAllAuras", 0.1)
 
     self:DisableDefaultBuffsDebuffs()
+end
+
+local LDB = LibStub("LibDataBroker-1.1")
+local LDBIcon = LibStub("LibDBIcon-1.0")
+
+local EpicPlatesLDB = LibStub("LibDataBroker-1.1"):NewDataObject("EpicPlates", {
+    type = "launcher",
+    text = "EpicPlates",
+    icon = 3565720,  
+    OnClick = function(_, button)
+        if button == "LeftButton" then
+            if Settings and Settings.OpenToCategory then
+                Settings.OpenToCategory("EpicPlates")
+            else
+                InterfaceOptionsFrame_OpenToCategory("EpicPlates")
+                InterfaceOptionsFrame_OpenToCategory("EpicPlates")  
+            end
+        elseif button == "RightButton" then
+            if Settings and Settings.OpenToCategory then
+                Settings.OpenToCategory("InterfaceOptionsFrame")  
+            else
+                InterfaceOptionsFrame_OpenToCategory("InterfaceOptionsFrame")
+            end
+        end
+    end,
+    OnTooltipShow = function(tooltip)
+        tooltip:AddLine("|cFF00FF00EpicPlates|r")  
+        tooltip:AddLine("|cFF00CCFFLeft-click|r: Open EpicPlates settings")  
+        tooltip:AddLine("|cFFFFA500Right-click|r: Open Interface Options")  
+    end,
+})
+
+function EpicPlates:OnInitialize()
+    self.db = LibStub("AceDB-3.0"):New("EpicPlatesDB", {
+        profile = {
+            iconSize = 20,
+            timerFontSize = 12,
+            timerFont = "Arial Narrow",
+            timerFontColor = {1, 1, 1},
+            minimap = { hide = false },
+            auraFilters = {
+                spellIDs = {},
+                spellNames = {},
+                casterNames = {}
+            }
+        }
+    }, true)
+
+    if not self.db.profile.minimap then
+        self.db.profile.minimap = { hide = false }
+    end
+
+    self:SetupOptions()
+    self:UpdateIconPositions()
+    self:OnEnable()
+    
+    LDBIcon:Register("EpicPlates", EpicPlatesLDB, self.db.profile.minimap)
+    
+    self:UpdateIconSize()
+
+    C_Timer.After(0.5, function() 
+        self:UpdateIconSize() 
+    end)
 end
 
 function EpicPlates:CompactUnitFrame_UpdateName(frame)
@@ -150,9 +215,9 @@ local function IsNPC(unit)
             not UnitPlayerControlled(unit) and
             not UnitIsEnemy('player', unit) and
             not UnitCanAttack('player', unit) and
-            (unitType == 'Creature') and
-            (not BLACKLIST[ID])
+            (unitType == 'Creature')
 end
+
 
 local function RGBToHex(r, g, b)
     r = r <= 1 and r >= 0 and r or 0
@@ -299,10 +364,9 @@ function EpicPlates:EnableGroupDragging(namePlate)
     local UnitFrame = namePlate.UnitFrame
     if not UnitFrame then return end
 
-    -- Create a frame to act as the parent for all buffs and debuffs
     if not UnitFrame.IconGroupFrame then
         UnitFrame.IconGroupFrame = CreateFrame("Frame", nil, UnitFrame)
-        UnitFrame.IconGroupFrame:SetSize(1, 1)  -- Size doesn't matter since it's invisible
+        UnitFrame.IconGroupFrame:SetSize(1, 1)  
         UnitFrame.IconGroupFrame:SetPoint("TOPLEFT", UnitFrame, "TOPLEFT", 0, 0)
     end
 
@@ -316,7 +380,6 @@ function EpicPlates:EnableGroupDragging(namePlate)
 
     UnitFrame.IconGroupFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        -- Save the new position to the database
         local point, relativeTo, relativePoint, xOffset, yOffset = self:GetPoint()
         EpicPlates.db.profile.iconGroupPosition = {point, relativePoint, xOffset, yOffset}
     end)
@@ -326,12 +389,10 @@ function EpicPlates:UpdateIconPositions()
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
         if UnitFrame and UnitFrame.buffIcons and UnitFrame.debuffIcons then
-            -- Reposition the group frame if a saved position exists
             if EpicPlates.db.profile.iconGroupPosition then
                 UnitFrame.IconGroupFrame:SetPoint(unpack(EpicPlates.db.profile.iconGroupPosition))
             end
 
-            -- Attach each icon to the group frame
             for i = 1, #UnitFrame.buffIcons do
                 local icon = UnitFrame.buffIcons[i].icon
                 icon:SetParent(UnitFrame.IconGroupFrame)
@@ -342,7 +403,6 @@ function EpicPlates:UpdateIconPositions()
                 icon:SetParent(UnitFrame.IconGroupFrame)
             end
 
-            -- Enable dragging for the entire group
             self:EnableGroupDragging(namePlate)
         end
     end
@@ -351,6 +411,8 @@ end
 function EpicPlates:UpdateIconSize()
     local iconSize = self.db.profile.iconSize
     local timerFontSize = self.db.profile.timerFontSize
+    local timerFont = LSM:Fetch("font", self.db.profile.timerFont)  
+    local timerFontColor = self.db.profile.timerFontColor or {1, 1, 1} 
 
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
@@ -360,9 +422,10 @@ function EpicPlates:UpdateIconSize()
                 local timer = UnitFrame.buffIcons[i].timer
 
                 icon:SetSize(iconSize, iconSize)
-                timer:SetFont("Fonts\\FRIZQT__.TTF", timerFontSize, "OUTLINE")
+                timer:SetFont(timerFont, timerFontSize, "OUTLINE")
+                timer:SetTextColor(unpack(timerFontColor))  
                 timer:ClearAllPoints()
-                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  -- Position the timer below the icon
+                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
             end
 
             for i = 1, #UnitFrame.debuffIcons do
@@ -370,14 +433,14 @@ function EpicPlates:UpdateIconSize()
                 local timer = UnitFrame.debuffIcons[i].timer
 
                 icon:SetSize(iconSize, iconSize)
-                timer:SetFont("Fonts\\FRIZQT__.TTF", timerFontSize, "OUTLINE")
+                timer:SetFont(timerFont, timerFontSize, "OUTLINE")
+                timer:SetTextColor(unpack(timerFontColor))  
                 timer:ClearAllPoints()
-                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  -- Position the timer below the icon
+                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
             end
         end
     end
 end
-
 
 -- Setup options after ensuring the options table is defined
 function EpicPlates:SetupOptions()
@@ -389,7 +452,6 @@ function EpicPlates:SetupOptions()
     AceConfig:RegisterOptionsTable("EpicPlates", options)
     self.optionsFrame = AceConfigDialog:AddToBlizOptions("EpicPlates", "EpicPlates")
 
-    -- Ensure that the icon size update is applied immediately when the option is changed
     self.db.RegisterCallback(self, "OnProfileChanged", "UpdateIconSize")
     self.db.RegisterCallback(self, "OnProfileCopied", "UpdateIconSize")
     self.db.RegisterCallback(self, "OnProfileReset", "UpdateIconSize")
@@ -515,8 +577,8 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     local debuffYOffset = -30 
     local xOffset = 10 
     local iconSize = self.db.profile.iconSize
-    local baseRowSpacing = 13  -- Base spacing between rows when the icons are at their default size
-    local adjustedRowSpacing = baseRowSpacing + (iconSize - 20) * 0.1  -- Adjust row spacing based on icon size
+    local baseRowSpacing = 13  
+    local adjustedRowSpacing = baseRowSpacing + (iconSize - 20) * 0.1  
 
     -- Create Buff Icons
     for i = 1, MAX_BUFFS do
@@ -531,7 +593,7 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
         timer:SetFontObject(SystemFont_Outline_Small)
-        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  -- Position the timer below the icon immediately
+        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  
         timer:Hide()
 
         UnitFrame.buffIcons[i] = {
@@ -553,7 +615,7 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
         timer:SetFontObject(SystemFont_Outline_Small)
-        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  -- Position the timer below the icon immediately
+        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  
         timer:Hide()
 
         UnitFrame.debuffIcons[i] = {
@@ -562,16 +624,45 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         }
     end
 
-    -- Ensure the sizes and positions are correct after creation
     self:UpdateIconSize()
 end
 
+
+local function IsAuraFiltered(spellName, spellID, casterName)
+    local filters = EpicPlates.db.profile.auraFilters
+
+    if filters.spellIDs[spellID] then
+        return true
+    end
+
+    if filters.spellNames[spellName] then
+        return true
+    end
+
+    if filters.casterNames[casterName] then
+        return true
+    end
+
+    return false
+end
 
 function EpicPlates:UpdateAuras(unit)
     local NamePlate = C_NamePlate.GetNamePlateForUnit(unit)
     local UnitFrame = NamePlate and NamePlate.UnitFrame
 
     if not UnitFrame then return end
+
+    if not UnitIsUnit("target", unit) and not UnitIsUnit("mouseover", unit) then
+        for i = 1, MAX_BUFFS do
+            UnitFrame.buffIcons[i].icon:Hide()
+            UnitFrame.buffIcons[i].timer:Hide()
+        end
+        for i = 1, MAX_DEBUFFS do
+            UnitFrame.debuffIcons[i].icon:Hide()
+            UnitFrame.debuffIcons[i].timer:Hide()
+        end
+        return
+    end
 
     local buffIndex = 1
     local debuffIndex = 1
@@ -581,8 +672,8 @@ function EpicPlates:UpdateAuras(unit)
     for i = 1, 40 do
         local aura = C_UnitAuras.GetBuffDataByIndex(unit, i)
         if not aura or buffIndex > MAX_BUFFS then break end
-        if aura.isHelpful and aura.sourceUnit == "player" then  
-            
+
+        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName) then
             self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime)
             buffIndex = buffIndex + 1
         end
@@ -592,12 +683,14 @@ function EpicPlates:UpdateAuras(unit)
     for i = 1, 40 do
         local aura = C_UnitAuras.GetDebuffDataByIndex(unit, i)
         if not aura or debuffIndex > MAX_DEBUFFS then break end
-        if aura.isHarmful and aura.sourceUnit == "player" then  
+
+        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName) then
             self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime)
             debuffIndex = debuffIndex + 1
         end
     end
 
+    -- Hide unused icons
     for i = buffIndex, MAX_BUFFS do
         UnitFrame.buffIcons[i].icon:Hide()
         UnitFrame.buffIcons[i].timer:Hide()
@@ -653,19 +746,7 @@ EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
      end
 end)
 
-function EpicPlates:OnInitialize()
-    self.db = LibStub("AceDB-3.0"):New("EpicPlatesDB", EpicPlates.defaults, true)
-    self:SetupOptions()
-    self:UpdateIconPositions()
 
-    -- Immediate update
-    self:UpdateIconSize()
-
-    -- Delayed update to ensure everything is fully initialized
-    C_Timer.After(0.5, function() 
-        self:UpdateIconSize() 
-    end)
-end
 
 
 
