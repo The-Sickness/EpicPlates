@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.1 - 11.0.2
+-- v1.2 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -16,11 +16,12 @@ local NAMEPLATE_ALPHA       = 0.7
 local ICON_SIZE             = 20 
 local MAX_BUFFS             = 12  
 local MAX_DEBUFFS           = 12  
-local BUFF_ICON_OFFSET_Y    = 60 
-local DEBUFF_ICON_OFFSET_Y  = 40 
+local BUFF_ICON_OFFSET_Y    = 20 
+local DEBUFF_ICON_OFFSET_Y  = 10 
 local BUFFS_PER_LINE        = 6   
-local DEBUFFS_PER_LINE      = 6   
-local LINE_SPACING_Y        = 7.5  
+local DEBUFFS_PER_LINE      = 6 
+local MAX_ROWS = 3  
+local LINE_SPACING_Y        = 9 
 
 if not EpicPlates then
     EpicPlates = LibStub('AceAddon-3.0'):NewAddon('EpicPlates', 'AceHook-3.0', 'AceEvent-3.0', 'AceTimer-3.0')
@@ -39,30 +40,9 @@ EpicPlates.defaults = {
 local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
 local EpicPlatesTooltip = CreateFrame('GameTooltip', 'EpicPlatesTooltip', nil, 'GameTooltipTemplate')
 
-local importantSpells = defaultSpells1
-local semiImportantSpells = defaultSpells2
-
-function EpicPlates:IsImportantSpell(spellID)
-    for _, id in ipairs(importantSpells) do
-        if id == spellID then
-            return true
-        end
-    end
-    return false
-end
-
-function EpicPlates:IsSemiImportantSpell(spellID)
-    for _, id in ipairs(semiImportantSpells) do
-        if id == spellID then
-            return true
-        end
-    end
-    return false
-end
-
 function EpicPlates:OnEnable()
     C_CVar.SetCVar('nameplateShowAll', '1')
-    C_CVar.SetCVar('nameplateShowFriends', '0') 
+    C_CVar.SetCVar('nameplateShowFriends', '1') 
     C_CVar.SetCVar('nameplateShowFriendlyNPCs', '0') 
     C_CVar.SetCVar('showQuestTrackingTooltips', '1')
 
@@ -122,9 +102,20 @@ function EpicPlates:OnInitialize()
                 spellIDs = {},
                 spellNames = {},
                 casterNames = {}
+            },
+            alwaysShow = {
+                spellIDs = {},
+                spellNames = {}
             }
         }
     }, true)
+
+    if not _G.defaultSpells1 or not _G.defaultSpells2 then
+    else
+        importantSpells = importantSpells or _G.defaultSpells1
+        semiImportantSpells = semiImportantSpells or _G.defaultSpells2
+
+    end
 
     if not self.db.profile.minimap then
         self.db.profile.minimap = { hide = false }
@@ -133,7 +124,10 @@ function EpicPlates:OnInitialize()
     self:SetupOptions()
     self:UpdateIconPositions()
     self:OnEnable()
-    
+    self:UpdateTimerFontSize()
+	
+
+    -- Register the minimap icon
     LDBIcon:Register("EpicPlates", EpicPlatesLDB, self.db.profile.minimap)
     
     self:UpdateIconSize()
@@ -141,6 +135,27 @@ function EpicPlates:OnInitialize()
     C_Timer.After(0.5, function() 
         self:UpdateIconSize() 
     end)
+end
+
+importantSpells = importantSpells or defaultSpells1
+semiImportantSpells = semiImportantSpells or defaultSpells2
+
+function EpicPlates:IsImportantSpell(spellID)
+    for _, id in ipairs(importantSpells) do
+        if id == spellID then
+            return true
+        end
+    end
+    return false
+end
+
+function EpicPlates:IsSemiImportantSpell(spellID)
+    for _, id in ipairs(semiImportantSpells) do
+        if id == spellID then
+            return true
+        end
+    end
+    return false
 end
 
 function EpicPlates:CompactUnitFrame_UpdateName(frame)
@@ -385,6 +400,25 @@ function EpicPlates:EnableGroupDragging(namePlate)
     end)
 end
 
+function EpicPlates:UpdateTimerFontSize()
+    for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
+        local unitFrame = namePlate.UnitFrame
+
+        if unitFrame and unitFrame.buffIcons then
+            for _, icon in ipairs(unitFrame.buffIcons) do
+                icon.timer:SetFont(LSM:Fetch("font", self.db.profile.timerFont), self.db.profile.timerFontSize, "OUTLINE")
+            end
+        end
+
+        if unitFrame and unitFrame.debuffIcons then
+            for _, icon in ipairs(unitFrame.debuffIcons) do
+                icon.timer:SetFont(LSM:Fetch("font", self.db.profile.timerFont), self.db.profile.timerFontSize, "OUTLINE")
+            end
+        end
+    end
+end
+
+
 function EpicPlates:UpdateIconPositions()
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
@@ -573,12 +607,8 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     UnitFrame.buffIcons = {}
     UnitFrame.debuffIcons = {}
 
-    local buffYOffset = -30 
-    local debuffYOffset = -30 
-    local xOffset = 10 
     local iconSize = self.db.profile.iconSize
-    local baseRowSpacing = 13  
-    local adjustedRowSpacing = baseRowSpacing + (iconSize - 20) * 0.1  
+    local rowSpacing = 13  -- Space between rows
 
     -- Create Buff Icons
     for i = 1, MAX_BUFFS do
@@ -587,13 +617,13 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         
         local row = math.floor((i - 1) / BUFFS_PER_LINE)
         local col = (i - 1) % BUFFS_PER_LINE
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2) + xOffset, BUFF_ICON_OFFSET_Y + (row * (iconSize + adjustedRowSpacing)) + buffYOffset)
-        
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), BUFF_ICON_OFFSET_Y + row * (iconSize + rowSpacing))
+
         icon:Hide()
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
         timer:SetFontObject(SystemFont_Outline_Small)
-        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  
+        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
         UnitFrame.buffIcons[i] = {
@@ -609,13 +639,13 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
 
         local row = math.floor((i - 1) / DEBUFFS_PER_LINE)
         local col = (i - 1) % DEBUFFS_PER_LINE
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2) + xOffset, DEBUFF_ICON_OFFSET_Y + (row * (iconSize + adjustedRowSpacing)) + debuffYOffset)
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), DEBUFF_ICON_OFFSET_Y + row * (iconSize + rowSpacing))
 
         icon:Hide()
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
         timer:SetFontObject(SystemFont_Outline_Small)
-        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)  
+        timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
         UnitFrame.debuffIcons[i] = {
@@ -624,27 +654,46 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         }
     end
 
+    -- Ensure the sizes and positions are correct after creation
     self:UpdateIconSize()
 end
 
 
 local function IsAuraFiltered(spellName, spellID, casterName)
     local filters = EpicPlates.db.profile.auraFilters
+    local alwaysShow = EpicPlates.db.profile.alwaysShow
 
-    if filters.spellIDs[spellID] then
-        return true
+    -- Always show specific spells, regardless of other filters
+    if spellID then
+        local spellInfo = C_Spell.GetSpellInfo(spellID)
+        if spellInfo and (alwaysShow.spellIDs[spellID] or alwaysShow.spellNames[spellInfo.name]) then
+            return false
+        end
     end
 
-    if filters.spellNames[spellName] then
-        return true
+    -- Normal filtering logic
+    if spellID then
+        local spellInfo = C_Spell.GetSpellInfo(spellID)
+        if spellInfo and filters.spellIDs[spellID] then
+            return true
+        end
     end
 
-    if filters.casterNames[casterName] then
+    if spellName then
+        local spellInfo = C_Spell.GetSpellInfo(spellName)
+        if spellInfo and filters.spellNames[spellInfo.name] then
+            return true
+        end
+    end
+
+    if casterName and filters.casterNames[casterName] then
         return true
     end
 
     return false
 end
+
+
 
 function EpicPlates:UpdateAuras(unit)
     local NamePlate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -702,7 +751,6 @@ function EpicPlates:UpdateAuras(unit)
     end
 end
 
--- Function to display aura on the nameplate
 function EpicPlates:DisplayAura(iconTable, aura, currentTime)
     local icon = iconTable.icon
     local timer = iconTable.timer
@@ -712,12 +760,28 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime)
 
     local remainingTime = aura.expirationTime - currentTime
     if remainingTime > 0 then
+        if EpicPlates.db.profile.colorMode == "dynamic" then
+            -- Change color based on remaining time
+            if remainingTime > 5 then
+                timer:SetTextColor(0, 1, 0)  -- Green
+            elseif remainingTime > 2 then
+                timer:SetTextColor(1, 1, 0)  -- Yellow
+            else
+                timer:SetTextColor(1, 0, 0)  -- Red
+            end
+        else
+            -- Use fixed color
+            local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
+            timer:SetTextColor(r, g, b)
+        end
+        
         timer:SetText(string.format("%.1f", remainingTime))
         timer:Show()
     else
         timer:Hide()
     end
 end
+
 
 -- Script to handle various events and apply updates accordingly
 EpicPlates.Events = CreateFrame("Frame")
@@ -745,6 +809,9 @@ EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
         end
      end
 end)
+
+
+
 
 
 
