@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.2 - 11.0.2
+-- v1.4 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -98,6 +98,7 @@ function EpicPlates:OnInitialize()
             timerFontSize = 12,
             timerFont = "Arial Narrow",
             timerFontColor = {1, 1, 1},
+            healthBarTexture = LSM:GetDefault("statusbar"),  -- Ensure this line is added
             minimap = { hide = false },
             auraFilters = {
                 spellIDs = {},
@@ -134,7 +135,18 @@ function EpicPlates:OnInitialize()
     C_Timer.After(0.5, function() 
         self:UpdateIconSize() 
     end)
+
+    self:ApplyTextureToAllNameplates()  
 end
+
+
+function EpicPlates:ApplyTextureToAllNameplates()
+    local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
+        nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
+    end
+end
+
 
 importantSpells = importantSpells or defaultSpells1
 semiImportantSpells = semiImportantSpells or defaultSpells2
@@ -166,11 +178,16 @@ end
 
 function EpicPlates:NAME_PLATE_CREATED(_, frame)
     self:NiceNameplateInfo_Create(frame)
+    local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+    frame.UnitFrame.healthBar:SetStatusBarTexture(texture)
 end
 
 function EpicPlates:NAME_PLATE_UNIT_ADDED(_, unit)
     self:NiceNameplateInfo_Update(unit)
     self:NiceNameplateFrames_Update(unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+    nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
 end
 
 function EpicPlates:NAME_PLATE_UNIT_REMOVED(_, unit)
@@ -297,107 +314,6 @@ function EpicPlates:MakeInfoString(unit, item)
     end
 end
 
-function EpicPlates:GetQuestInfo(unit)
-    local ObjectiveCount = 0
-    local QuestName
-
-    if EpicPlatesTooltip:NumLines() >= 3 then
-        for i = 3, EpicPlatesTooltip:NumLines() do
-            local QuestLine = _G['EpicPlatesTooltipTextLeft' .. i]
-            local QuestLineText = QuestLine and QuestLine:GetText()
-
-            local PlayerName, ProgressText = strmatch(QuestLineText, '^ ([^ ]-) ?%- (.+)$')
-
-            if not (PlayerName and PlayerName ~= '' and PlayerName ~= UnitName('player')) then
-                if not QuestName and ProgressText then
-                    QuestName = _G['EpicPlatesTooltipTextLeft' .. i - 1]:GetText()
-                end
-                if ProgressText then
-                    local x, y = strmatch(ProgressText, '(%d+)/(%d+)')
-                    if x and y then
-                        local NumLeft = y - x
-                        if NumLeft > ObjectiveCount then 
-                            ObjectiveCount = NumLeft
-                            return ProgressText
-                        end
-                    else
-                        return QuestName .. ': ' .. ProgressText
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
-
-function EpicPlates:GetQuestColorInfo(unit)
-    local ObjectiveCount = 0
-    local QuestName
-    local ProgressColored
-
-    if EpicPlatesTooltip:NumLines() >= 3 then
-        for i = 3, EpicPlatesTooltip:NumLines() do
-            local QuestLine = _G['EpicPlatesTooltipTextLeft' .. i]
-            local QuestLineText = QuestLine and QuestLine:GetText()
-
-            local PlayerName, ProgressText = strmatch(QuestLineText, '^ ([^ ]-) ?%- (.+)$')
-
-            if not (PlayerName and PlayerName ~= '' and PlayerName ~= UnitName('player')) then
-                if not QuestName and ProgressText then
-                    QuestName = _G['EpicPlatesTooltipTextLeft' .. i - 1]:GetText()
-                end
-                if ProgressText then
-                    local x, y = strmatch(ProgressText, '(%d+)/(%d+)')
-                    if x and y then
-                        local NumLeft = y - x
-                        if NumLeft > ObjectiveCount then
-                            ObjectiveCount = NumLeft
-                            ProgressColored = ProgressText
-                        end
-                    else
-                        ProgressColored = QuestName .. ': ' .. ProgressText
-                    end
-                end
-            end
-        end
-        if ProgressColored then
-            for i = 1, C_QuestLog.GetNumQuestLogEntries() do
-                local questInfo = C_QuestLog.GetInfo(i)
-                if not questInfo.isHeader and questInfo.title == QuestName then
-                    local colors = GetQuestDifficultyColor(questInfo.level)
-                    return '|cFF'..RGBToHex(colors.r, colors.g, colors.b)..ProgressColored..'|r'
-                end
-            end
-        end
-    end
-    return false
-end
-
-function EpicPlates:EnableGroupDragging(namePlate)
-    local UnitFrame = namePlate.UnitFrame
-    if not UnitFrame then return end
-
-    if not UnitFrame.IconGroupFrame then
-        UnitFrame.IconGroupFrame = CreateFrame("Frame", nil, UnitFrame)
-        UnitFrame.IconGroupFrame:SetSize(1, 1)  
-        UnitFrame.IconGroupFrame:SetPoint("TOPLEFT", UnitFrame, "TOPLEFT", 0, 0)
-    end
-
-    UnitFrame.IconGroupFrame:SetMovable(true)
-    UnitFrame.IconGroupFrame:EnableMouse(true)
-    UnitFrame.IconGroupFrame:RegisterForDrag("LeftButton")
-
-    UnitFrame.IconGroupFrame:SetScript("OnDragStart", function(self)
-        self:StartMoving()
-    end)
-
-    UnitFrame.IconGroupFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, relativeTo, relativePoint, xOffset, yOffset = self:GetPoint()
-        EpicPlates.db.profile.iconGroupPosition = {point, relativePoint, xOffset, yOffset}
-    end)
-end
-
 function EpicPlates:UpdateTimerFontSize()
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local unitFrame = namePlate.UnitFrame
@@ -498,6 +414,10 @@ function EpicPlates:NiceNameplateFrames_Update(unit)
             self:CreateAuraIcons(UnitFrame)
         end
 
+        -- Apply the texture to the health bar
+        local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+        UnitFrame.healthBar:SetStatusBarTexture(texture)
+
         local healthBar = UnitFrame.healthBar
         local NiceNameplateInfo = UnitFrame.NiceNameplateInfo
         local classificationIndicator = UnitFrame.ClassificationFrame and UnitFrame.ClassificationFrame.classificationIndicator
@@ -597,6 +517,24 @@ function EpicPlates:NiceNameplateInfo_Delete(unit)
     end
 end
 
+function EpicPlates:ApplyHealthBarTexture(texture)
+    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
+        nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
+    end
+end
+
+local function UpdateNameplateHealthBar(nameplate)
+    local texture = LSM:Fetch("statusbar", EpicPlates.db.profile.healthBarTexture)
+    nameplate.healthBar:SetStatusBarTexture(texture)
+end
+
+local function ApplyTextureToAllNameplates()
+    local texture = LSM:Fetch("statusbar", EpicPlates.db.profile.healthBarTexture)
+    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
+        nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
+    end
+end
+
 function EpicPlates:CreateAuraIcons(UnitFrame)
     if not UnitFrame then return end
 
@@ -670,7 +608,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         }
     end
 
-    -- Ensure the sizes and positions are correct after creation
     self:UpdateIconSize()
 end
 
@@ -680,7 +617,6 @@ local function IsAuraFiltered(spellName, spellID, casterName, remainingTime)
     local thresholdMore = EpicPlates.db.profile.auraThresholdMore or 0
     local thresholdLess = EpicPlates.db.profile.auraThresholdLess or 60
 
-    -- Always show specific spells, regardless of other filters
     if spellID then
         local spellInfo = C_Spell.GetSpellInfo(spellID)
         if spellInfo and (alwaysShow.spellIDs[spellID] or alwaysShow.spellNames[spellInfo.name]) then
@@ -688,12 +624,10 @@ local function IsAuraFiltered(spellName, spellID, casterName, remainingTime)
         end
     end
 
-    -- Apply the duration threshold filters
     if remainingTime and (remainingTime < thresholdMore or remainingTime > thresholdLess) then
         return true
     end
 
-    -- Normal filtering logic
     if spellID then
         local spellInfo = C_Spell.GetSpellInfo(spellID)
         if spellInfo and filters.spellIDs[spellID] then
@@ -743,7 +677,7 @@ function EpicPlates:UpdateAuras(unit)
         if not aura or buffIndex > MAX_BUFFS then break end
 
         if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
-            aura.index = i  -- Store index for tooltip
+            aura.index = i  
             self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)  -- Pass UnitFrame here
             buffIndex = buffIndex + 1
         end
@@ -755,7 +689,7 @@ function EpicPlates:UpdateAuras(unit)
         if not aura or debuffIndex > MAX_DEBUFFS then break end
 
         if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
-            aura.index = i  -- Store index for tooltip
+            aura.index = i  
             self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)  -- Pass UnitFrame here
             debuffIndex = debuffIndex + 1
         end
@@ -773,7 +707,6 @@ function EpicPlates:UpdateAuras(unit)
     end
 end
 
-
 function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     local icon = iconTable.icon
     local timer = iconTable.timer
@@ -784,25 +717,21 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     local remainingTime = aura.expirationTime - currentTime
     if remainingTime > 0 and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, remainingTime) then
         if EpicPlates.db.profile.colorMode == "dynamic" then
-            -- Change color based on remaining time
             if remainingTime > 5 then
-                timer:SetTextColor(0, 1, 0)  -- Green
+                timer:SetTextColor(0, 1, 0)  
             elseif remainingTime > 2 then
-                timer:SetTextColor(1, 1, 0)  -- Yellow
+                timer:SetTextColor(1, 1, 0)  
             else
-                timer:SetTextColor(1, 0, 0)  -- Red
+                timer:SetTextColor(1, 0, 0)  
             end
         else
-            -- Use fixed color
             local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
             timer:SetTextColor(r, g, b)
         end
         
-        -- Set the timer text and show it
         timer:SetText(string.format("%.1f", remainingTime))
         timer:Show()
 
-        -- Set the tooltip for the icon
         icon:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:ClearLines()
@@ -813,12 +742,10 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
             GameTooltip:Hide()
         end)
     else
-        -- Hide the timer and icon if the aura is expired or filtered
         timer:Hide()
         icon:Hide()
     end
 end
-
 
 -- Script to handle various events and apply updates accordingly
 EpicPlates.Events = CreateFrame("Frame")
