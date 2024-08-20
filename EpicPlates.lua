@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.4 - 11.0.2
+-- v1.5 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -29,12 +29,13 @@ end
 
 EpicPlates.defaults = {
     profile = {
-        iconSize = 20,       -- Default icon size
-        timerFontSize = 10,  -- Default timer font size
-        timerFont = "Friz Quadrata TT",  -- Default font
-        timerFontColor = {1, 1, 1},  -- Default color (white)
+        iconSize = 20,       
+        timerFontSize = 10,  
+        timerFont = "Friz Quadrata TT",  
+        timerFontColor = {1, 1, 1},  
         buffIconPositions = {},
         debuffIconPositions = {},
+		showHealthPercent = false, 
     },
 }
 
@@ -43,7 +44,7 @@ local EpicPlatesTooltip = CreateFrame('GameTooltip', 'EpicPlatesTooltip', nil, '
 
 function EpicPlates:OnEnable()
     C_CVar.SetCVar('nameplateShowAll', '1')
-    C_CVar.SetCVar('nameplateShowFriends', '1') 
+    C_CVar.SetCVar('nameplateShowFriends', '0') 
     C_CVar.SetCVar('nameplateShowFriendlyNPCs', '0') 
     C_CVar.SetCVar('showQuestTrackingTooltips', '1')
 
@@ -51,6 +52,7 @@ function EpicPlates:OnEnable()
     self:RegisterEvent('NAME_PLATE_UNIT_ADDED')
     self:RegisterEvent('NAME_PLATE_UNIT_REMOVED')
     self:RegisterEvent('UNIT_THREAT_LIST_UPDATE')
+	self:RegisterEvent("PLAYER_TARGET_CHANGED")
 
     if not self:IsHooked('CompactUnitFrame_UpdateName') then
         self:SecureHook('CompactUnitFrame_UpdateName')
@@ -147,7 +149,6 @@ function EpicPlates:ApplyTextureToAllNameplates()
     end
 end
 
-
 importantSpells = importantSpells or defaultSpells1
 semiImportantSpells = semiImportantSpells or defaultSpells2
 
@@ -173,32 +174,44 @@ function EpicPlates:CompactUnitFrame_UpdateName(frame)
     if frame.unit and strsub(frame.unit, 1, 9) == "nameplate" then
         self:NiceNameplateInfo_Update(frame.unit)
         self:NiceNameplateFrames_Update(frame.unit)
+        self:UpdateHealthBarWithPercent(frame.unit)  
     end
 end
 
 function EpicPlates:NAME_PLATE_CREATED(_, frame)
     self:NiceNameplateInfo_Create(frame)
-    local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
-    frame.UnitFrame.healthBar:SetStatusBarTexture(texture)
+    if frame.UnitFrame then
+        local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+        frame.UnitFrame.healthBar:SetStatusBarTexture(texture)
+        self:UpdateHealthBarWithPercent(frame.UnitFrame.unit)  
+    end
 end
 
 function EpicPlates:NAME_PLATE_UNIT_ADDED(_, unit)
-    self:NiceNameplateInfo_Update(unit)
-    self:NiceNameplateFrames_Update(unit)
     local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
-    local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
-    nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
+    if nameplate and nameplate.UnitFrame then
+        self:NiceNameplateInfo_Update(unit)
+        self:NiceNameplateFrames_Update(unit)
+        local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
+        nameplate.UnitFrame.healthBar:SetStatusBarTexture(texture)
+        self:UpdateHealthBarWithPercent(unit)  
+    end
 end
 
 function EpicPlates:NAME_PLATE_UNIT_REMOVED(_, unit)
-    self:NiceNameplateInfo_Update(unit)
-    self:NiceNameplateFrames_Update(unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if nameplate and nameplate.UnitFrame then
+        self:NiceNameplateInfo_Update(unit)
+        self:NiceNameplateFrames_Update(unit)
+        self:UpdateHealthBarWithPercent(unit)  
+    end
 end
 
 function EpicPlates:UNIT_THREAT_LIST_UPDATE(_, unit)
     if unit and unit:match('nameplate') then
         self:NiceNameplateInfo_Update(unit)
         self:NiceNameplateFrames_Update(unit)
+        self:UpdateHealthBarWithPercent(unit)  
     end
 end
 
@@ -207,8 +220,43 @@ function EpicPlates:UpdateAllAuras()
         local UnitFrame = NamePlate.UnitFrame
         if UnitFrame and UnitFrame.unit then
             self:UpdateAuras(UnitFrame.unit)
+            self:UpdateHealthBarWithPercent(UnitFrame.unit)  
         end
     end
+end
+
+function EpicPlates:UpdateHealthBarWithPercent(unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if nameplate and nameplate.UnitFrame then
+        local healthBar = nameplate.UnitFrame.healthBar
+        if UnitIsUnit(unit, "target") and self.db.profile.showHealthPercent then
+            local healthPercent = (UnitHealth(unit) / UnitHealthMax(unit)) * 100
+            if not healthBar.text then
+                healthBar.text = healthBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                healthBar.text:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
+            end
+            healthBar.text:SetText(string.format("%.1f%%", healthPercent))
+            healthBar.text:Show()
+        else
+            if healthBar.text then
+                healthBar.text:Hide()
+            end
+        end
+    end
+end
+
+-- Ensure health percentage is updated when the option is toggled or the target changes
+function EpicPlates:UpdateAllNameplates()
+    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
+        local unit = nameplate.UnitFrame.unit
+        if unit then
+            self:UpdateHealthBarWithPercent(unit)
+        end
+    end
+end
+
+function EpicPlates:PLAYER_TARGET_CHANGED()
+    self:UpdateAllNameplates()
 end
 
 -- Disable default buffs/debuffs on the nameplate
@@ -414,7 +462,6 @@ function EpicPlates:NiceNameplateFrames_Update(unit)
             self:CreateAuraIcons(UnitFrame)
         end
 
-        -- Apply the texture to the health bar
         local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
         UnitFrame.healthBar:SetStatusBarTexture(texture)
 
@@ -544,14 +591,21 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     local iconSize = self.db.profile.iconSize
     local rowSpacing = 14  -- Space between rows
 
+    -- Ensure buffIconPositions and debuffIconPositions exist
+    local buffIconPos = self.db.profile.buffIconPositions or { y = 0 }
+    local debuffIconPos = self.db.profile.debuffIconPositions or { y = 0 }
+
     -- Create Buff Icons
     for i = 1, MAX_BUFFS do
         local icon = UnitFrame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(iconSize, iconSize)
-        
-        local row = math.floor((i - 1) / BUFFS_PER_LINE)
-        local col = (i - 1) % BUFFS_PER_LINE
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), BUFF_ICON_OFFSET_Y + row * (iconSize + rowSpacing))
+
+        local availableWidth = UnitFrame:GetWidth()
+        local maxIconsPerRow = math.floor((availableWidth + 2) / (iconSize + 2))
+
+        local row = math.floor((i - 1) / maxIconsPerRow)
+        local col = (i - 1) % maxIconsPerRow
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), buffIconPos.y + row * (iconSize + rowSpacing))
 
         icon:Hide()
 
@@ -560,7 +614,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
-        -- Tooltip functionality for buffs
         icon:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetUnitAura(UnitFrame.unit, i, "HELPFUL")
@@ -581,9 +634,12 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         local icon = UnitFrame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(iconSize, iconSize)
 
-        local row = math.floor((i - 1) / DEBUFFS_PER_LINE)
-        local col = (i - 1) % DEBUFFS_PER_LINE
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), DEBUFF_ICON_OFFSET_Y + row * (iconSize + rowSpacing))
+        local availableWidth = UnitFrame:GetWidth()
+        local maxIconsPerRow = math.floor((availableWidth + 2) / (iconSize + 2))
+
+        local row = math.floor((i - 1) / maxIconsPerRow)
+        local col = (i - 1) % maxIconsPerRow
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), debuffIconPos.y + row * (iconSize + rowSpacing))
 
         icon:Hide()
 
@@ -592,7 +648,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
-        -- Tooltip functionality for debuffs
         icon:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetUnitAura(UnitFrame.unit, i, "HARMFUL")
@@ -657,12 +712,16 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitIsUnit("target", unit) and not UnitIsUnit("mouseover", unit) then
         for i = 1, MAX_BUFFS do
-            UnitFrame.buffIcons[i].icon:Hide()
-            UnitFrame.buffIcons[i].timer:Hide()
+            if UnitFrame.buffIcons[i] then
+                UnitFrame.buffIcons[i].icon:Hide()
+                UnitFrame.buffIcons[i].timer:Hide()
+            end
         end
         for i = 1, MAX_DEBUFFS do
-            UnitFrame.debuffIcons[i].icon:Hide()
-            UnitFrame.debuffIcons[i].timer:Hide()
+            if UnitFrame.debuffIcons[i] then
+                UnitFrame.debuffIcons[i].icon:Hide()
+                UnitFrame.debuffIcons[i].timer:Hide()
+            end
         end
         return
     end
@@ -678,7 +737,7 @@ function EpicPlates:UpdateAuras(unit)
 
         if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
             aura.index = i  
-            self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)  -- Pass UnitFrame here
+            self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)
             buffIndex = buffIndex + 1
         end
     end
@@ -690,20 +749,24 @@ function EpicPlates:UpdateAuras(unit)
 
         if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
             aura.index = i  
-            self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)  -- Pass UnitFrame here
+            self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)
             debuffIndex = debuffIndex + 1
         end
     end
 
     -- Hide unused icons
     for i = buffIndex, MAX_BUFFS do
-        UnitFrame.buffIcons[i].icon:Hide()
-        UnitFrame.buffIcons[i].timer:Hide()
+        if UnitFrame.buffIcons[i] then
+            UnitFrame.buffIcons[i].icon:Hide()
+            UnitFrame.buffIcons[i].timer:Hide()
+        end
     end
 
     for i = debuffIndex, MAX_DEBUFFS do
-        UnitFrame.debuffIcons[i].icon:Hide()
-        UnitFrame.debuffIcons[i].timer:Hide()
+        if UnitFrame.debuffIcons[i] then
+            UnitFrame.debuffIcons[i].icon:Hide()
+            UnitFrame.debuffIcons[i].timer:Hide()
+        end
     end
 end
 
