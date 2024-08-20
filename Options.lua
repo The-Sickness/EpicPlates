@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.4 - 11.0.2
+-- v1.5 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -10,24 +10,37 @@ local options = {
     name = "EpicPlates",
     type = 'group',
     args = {
-        -- Health Bar Settings Header
+                -- Health Bar Settings Header
         healthBarSettingsHeader = {
             type = 'header',
             name = "Health Bar Settings",
             order = 1,
         },
-healthBarTexture = {
-    type = "select",
-    dialogControl = 'LSM30_Statusbar',
-    name = "Health Bar Texture",
-    desc = "Select the texture for the nameplate health bar.",
-    values = LSM:HashTable("statusbar"),
-    get = function(info) return EpicPlates.db.profile.healthBarTexture end,
-    set = function(info, value)
-        EpicPlates.db.profile.healthBarTexture = value
-        EpicPlates:ApplyTextureToAllNameplates()  -- Apply the texture change immediately
-    end,
-    order = 2,
+        healthBarTexture = {
+            type = "select",
+            dialogControl = 'LSM30_Statusbar',
+            name = "Health Bar Texture",
+            desc = "Select the texture for the nameplate health bar.",
+            values = LSM:HashTable("statusbar"),
+            get = function(info) return EpicPlates.db.profile.healthBarTexture end,
+            set = function(info, value)
+                EpicPlates.db.profile.healthBarTexture = value
+                EpicPlates:ApplyTextureToAllNameplates()  -- Apply the texture change immediately
+            end,
+            order = 2,
+        },
+        showHealthPercent = {
+            type = 'toggle',
+            name = "Show Health Percentage",
+            desc = "Enable this option to display the health percentage on the nameplate health bar.",
+            order = 3,
+            get = function() 
+                return EpicPlates.db.profile.showHealthPercent 
+            end,
+            set = function(_, value) 
+                EpicPlates.db.profile.showHealthPercent = value
+                EpicPlates:UpdateAllNameplates()  -- Update all nameplates to reflect the new setting
+            end,
         },
 
         -- Icon Settings Header
