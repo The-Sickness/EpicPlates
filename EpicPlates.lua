@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.5 - 11.0.2
+-- v1.6 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -18,8 +18,8 @@ local MAX_BUFFS             = 10
 local MAX_DEBUFFS           = 10  
 local BUFF_ICON_OFFSET_Y    = 20 
 local DEBUFF_ICON_OFFSET_Y  = 10 
-local BUFFS_PER_LINE        = 6   
-local DEBUFFS_PER_LINE      = 6 
+local BUFFS_PER_LINE        = 8  
+local DEBUFFS_PER_LINE      = 8 
 local MAX_ROWS = 3  
 local LINE_SPACING_Y        = 9 
 
@@ -29,13 +29,17 @@ end
 
 EpicPlates.defaults = {
     profile = {
-        iconSize = 20,       
-        timerFontSize = 10,  
-        timerFont = "Friz Quadrata TT",  
-        timerFontColor = {1, 1, 1},  
+        iconSize = 20,
+        timerFontSize = 10,
+        timerFont = "Friz Quadrata TT",
+        timerFontColor = {1, 1, 1},
         buffIconPositions = {},
         debuffIconPositions = {},
-		showHealthPercent = false, 
+        showHealthPercent = false,
+        healthPercentFontColor = {1, 1, 1}, 
+        timerPosition = "BELOW",	
+        iconXOffset = 0,   
+        iconYOffset = 0,		
     },
 }
 
@@ -141,7 +145,6 @@ function EpicPlates:OnInitialize()
     self:ApplyTextureToAllNameplates()  
 end
 
-
 function EpicPlates:ApplyTextureToAllNameplates()
     local texture = LSM:Fetch("statusbar", self.db.profile.healthBarTexture)
     for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
@@ -236,6 +239,9 @@ function EpicPlates:UpdateHealthBarWithPercent(unit)
                 healthBar.text:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
             end
             healthBar.text:SetText(string.format("%.1f%%", healthPercent))
+            local color = self.db.profile.healthPercentFontColor or {1, 1, 1}  -- Add default value
+            local r, g, b = unpack(color)
+            healthBar.text:SetTextColor(r, g, b)  -- Set the color here
             healthBar.text:Show()
         else
             if healthBar.text then
@@ -245,11 +251,12 @@ function EpicPlates:UpdateHealthBarWithPercent(unit)
     end
 end
 
--- Ensure health percentage is updated when the option is toggled or the target changes
+
 function EpicPlates:UpdateAllNameplates()
-    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
-        local unit = nameplate.UnitFrame.unit
+    for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
+        local unit = namePlate.UnitFrame.unit
         if unit then
+            self:UpdateAuras(unit)
             self:UpdateHealthBarWithPercent(unit)
         end
     end
@@ -384,21 +391,46 @@ function EpicPlates:UpdateIconPositions()
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
         if UnitFrame and UnitFrame.buffIcons and UnitFrame.debuffIcons then
-            if EpicPlates.db.profile.iconGroupPosition then
-                UnitFrame.IconGroupFrame:SetPoint(unpack(EpicPlates.db.profile.iconGroupPosition))
-            end
+            local iconXOffset = self.db.profile.iconXOffset or 0
+            local iconYOffset = self.db.profile.iconYOffset or 0
 
+            -- Adjust Buff Icons
             for i = 1, #UnitFrame.buffIcons do
                 local icon = UnitFrame.buffIcons[i].icon
-                icon:SetParent(UnitFrame.IconGroupFrame)
+                local timer = UnitFrame.buffIcons[i].timer
+                
+                local availableWidth = UnitFrame:GetWidth()
+                local maxIconsPerRow = math.floor((availableWidth + 2) / (ICON_SIZE + 2))
+
+                local row = math.floor((i - 1) / maxIconsPerRow)
+                local col = (i - 1) % maxIconsPerRow
+
+                local xPos = col * (ICON_SIZE + 2) + iconXOffset
+                local yPos = BUFF_ICON_OFFSET_Y + row * (ICON_SIZE + LINE_SPACING_Y) + iconYOffset
+
+                icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
+                icon:Show()
+                timer:Show()
             end
 
+            -- Adjust Debuff Icons
             for i = 1, #UnitFrame.debuffIcons do
                 local icon = UnitFrame.debuffIcons[i].icon
-                icon:SetParent(UnitFrame.IconGroupFrame)
-            end
+                local timer = UnitFrame.debuffIcons[i].timer
+                
+                local availableWidth = UnitFrame:GetWidth()
+                local maxIconsPerRow = math.floor((availableWidth + 2) / (ICON_SIZE + 2))
 
-            self:EnableGroupDragging(namePlate)
+                local row = math.floor((i - 1) / maxIconsPerRow)
+                local col = (i - 1) % maxIconsPerRow
+
+                local xPos = col * (ICON_SIZE + 2) + iconXOffset
+                local yPos = DEBUFF_ICON_OFFSET_Y + row * (ICON_SIZE + LINE_SPACING_Y) + iconYOffset
+
+                icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
+                icon:Show()
+                timer:Show()
+            end
         end
     end
 end
@@ -408,6 +440,7 @@ function EpicPlates:UpdateIconSize()
     local timerFontSize = self.db.profile.timerFontSize
     local timerFont = LSM:Fetch("font", self.db.profile.timerFont)  
     local timerFontColor = self.db.profile.timerFontColor or {1, 1, 1} 
+    local timerPosition = self.db.profile.timerPosition  -- Get the timer position
 
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
@@ -418,9 +451,13 @@ function EpicPlates:UpdateIconSize()
 
                 icon:SetSize(iconSize, iconSize)
                 timer:SetFont(timerFont, timerFontSize, "OUTLINE")
-                timer:SetTextColor(unpack(timerFontColor))  
+                timer:SetTextColor(unpack(timerFontColor))
                 timer:ClearAllPoints()
-                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                if timerPosition == "MIDDLE" then
+                    timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                else
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                end
             end
 
             for i = 1, #UnitFrame.debuffIcons do
@@ -429,9 +466,13 @@ function EpicPlates:UpdateIconSize()
 
                 icon:SetSize(iconSize, iconSize)
                 timer:SetFont(timerFont, timerFontSize, "OUTLINE")
-                timer:SetTextColor(unpack(timerFontColor))  
+                timer:SetTextColor(unpack(timerFontColor))
                 timer:ClearAllPoints()
-                timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                if timerPosition == "MIDDLE" then
+                    timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                else
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                end
             end
         end
     end
@@ -591,9 +632,11 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     local iconSize = self.db.profile.iconSize
     local rowSpacing = 14  -- Space between rows
 
-    -- Ensure buffIconPositions and debuffIconPositions exist
-    local buffIconPos = self.db.profile.buffIconPositions or { y = 0 }
-    local debuffIconPos = self.db.profile.debuffIconPositions or { y = 0 }
+    local iconXOffset = self.db.profile.iconXOffset or 0
+    local iconYOffset = self.db.profile.iconYOffset or 0
+
+    local buffIconPos = self.db.profile.buffIconPositions or { y = 0, x = 0 }
+    local debuffIconPos = self.db.profile.debuffIconPositions or { y = 0, x = 0 }
 
     -- Create Buff Icons
     for i = 1, MAX_BUFFS do
@@ -605,8 +648,10 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
 
         local row = math.floor((i - 1) / maxIconsPerRow)
         local col = (i - 1) % maxIconsPerRow
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), buffIconPos.y + row * (iconSize + rowSpacing))
+        local xPos = col * (iconSize + 2) + iconXOffset + buffIconPos.x
+        local yPos = buffIconPos.y + row * (iconSize + rowSpacing) + iconYOffset
 
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
         icon:Hide()
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
@@ -627,6 +672,8 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
             icon = icon,
             timer = timer
         }
+
+        icon:Show()
     end
 
     -- Create Debuff Icons
@@ -639,8 +686,10 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
 
         local row = math.floor((i - 1) / maxIconsPerRow)
         local col = (i - 1) % maxIconsPerRow
-        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", col * (iconSize + 2), debuffIconPos.y + row * (iconSize + rowSpacing))
+        local xPos = col * (iconSize + 2) + iconXOffset + debuffIconPos.x
+        local yPos = debuffIconPos.y + row * (iconSize + rowSpacing) + iconYOffset
 
+        icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
         icon:Hide()
 
         local timer = UnitFrame:CreateFontString(nil, "OVERLAY")
@@ -661,6 +710,8 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
             icon = icon,
             timer = timer
         }
+
+        icon:Show()
     end
 
     self:UpdateIconSize()
