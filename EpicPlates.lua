@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.6 - 11.0.2
+-- v1.0 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -104,7 +104,7 @@ function EpicPlates:OnInitialize()
             timerFontSize = 12,
             timerFont = "Arial Narrow",
             timerFontColor = {1, 1, 1},
-            healthBarTexture = LSM:GetDefault("statusbar"),  -- Ensure this line is added
+            healthBarTexture = LSM:GetDefault("statusbar"),  
             minimap = { hide = false },
             auraFilters = {
                 spellIDs = {},
@@ -239,9 +239,9 @@ function EpicPlates:UpdateHealthBarWithPercent(unit)
                 healthBar.text:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
             end
             healthBar.text:SetText(string.format("%.1f%%", healthPercent))
-            local color = self.db.profile.healthPercentFontColor or {1, 1, 1}  -- Add default value
+            local color = self.db.profile.healthPercentFontColor or {1, 1, 1}  
             local r, g, b = unpack(color)
-            healthBar.text:SetTextColor(r, g, b)  -- Set the color here
+            healthBar.text:SetTextColor(r, g, b)  
             healthBar.text:Show()
         else
             if healthBar.text then
@@ -250,7 +250,6 @@ function EpicPlates:UpdateHealthBarWithPercent(unit)
         end
     end
 end
-
 
 function EpicPlates:UpdateAllNameplates()
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
@@ -398,7 +397,7 @@ function EpicPlates:UpdateIconPositions()
             for i = 1, #UnitFrame.buffIcons do
                 local icon = UnitFrame.buffIcons[i].icon
                 local timer = UnitFrame.buffIcons[i].timer
-                
+
                 local availableWidth = UnitFrame:GetWidth()
                 local maxIconsPerRow = math.floor((availableWidth + 2) / (ICON_SIZE + 2))
 
@@ -410,14 +409,24 @@ function EpicPlates:UpdateIconPositions()
 
                 icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
                 icon:Show()
+              
+                timer:ClearAllPoints()
+                if self.db.profile.timerPosition == "MIDDLE" then
+                    timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                else
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                end
+              
+                local font, size, flags = timer:GetFont()
+                timer:SetFont(font, size, flags)
                 timer:Show()
             end
 
-            -- Adjust Debuff Icons
+            -- Adjust Debuff Icons (same logic as above)
             for i = 1, #UnitFrame.debuffIcons do
                 local icon = UnitFrame.debuffIcons[i].icon
                 local timer = UnitFrame.debuffIcons[i].timer
-                
+
                 local availableWidth = UnitFrame:GetWidth()
                 local maxIconsPerRow = math.floor((availableWidth + 2) / (ICON_SIZE + 2))
 
@@ -429,10 +438,36 @@ function EpicPlates:UpdateIconPositions()
 
                 icon:SetPoint("BOTTOMLEFT", UnitFrame, "TOPLEFT", xPos, yPos)
                 icon:Show()
+
+                timer:ClearAllPoints()
+                if self.db.profile.timerPosition == "MIDDLE" then
+                    timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                else
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                end
+
+                local font, size, flags = timer:GetFont()
+                timer:SetFont(font, size, flags)
                 timer:Show()
             end
         end
     end
+end
+
+function EpicPlates:PromptReloadUI()
+    StaticPopupDialogs["EPICPLATES_RELOADUI"] = {
+        text = "|cFFFF0000You have changed the icon offsets.|r\n\n|cFFFFFFFFThese changes require a UI reload to take effect.|r\n\n|cFF0000FFWould you like to reload the UI now?|r",
+        button1 = "|cFF0000FFReload UI|r",
+        button2 = "|cFFFF0000Cancel|r",
+        OnAccept = function()
+            ReloadUI()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+    StaticPopup_Show("EPICPLATES_RELOADUI")
 end
 
 function EpicPlates:UpdateIconSize()
