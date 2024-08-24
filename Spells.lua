@@ -108,6 +108,7 @@ _G.defaultSpells2 = {
 	16166, --Elemental Mastery - burst
 	204288, --Earth Shield
 	114050, --Ascendance
+	188389, --Flame Shock
 
 	-- Druid
 	106951, --Berserk - burst
