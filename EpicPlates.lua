@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.0 - 11.0.2
+-- v1.1 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -490,8 +490,10 @@ function EpicPlates:UpdateIconSize()
                 timer:ClearAllPoints()
                 if timerPosition == "MIDDLE" then
                     timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                else
+                elseif timerPosition == "BELOW" then
                     timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                else
+                    timer:Hide()  -- Hide the timer if "NONE" is selected
                 end
             end
 
@@ -505,13 +507,16 @@ function EpicPlates:UpdateIconSize()
                 timer:ClearAllPoints()
                 if timerPosition == "MIDDLE" then
                     timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                else
+                elseif timerPosition == "BELOW" then
                     timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                else
+                    timer:Hide()  -- Hide the timer if "NONE" is selected
                 end
             end
         end
     end
 end
+
 
 -- Setup options after ensuring the options table is defined
 function EpicPlates:SetupOptions()
@@ -859,27 +864,32 @@ end
 function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     local icon = iconTable.icon
     local timer = iconTable.timer
+    local timerPosition = self.db.profile.timerPosition  -- Get the timer position
 
     icon:SetTexture(aura.icon)
     icon:Show()
 
     local remainingTime = aura.expirationTime - currentTime
     if remainingTime > 0 and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, remainingTime) then
-        if EpicPlates.db.profile.colorMode == "dynamic" then
-            if remainingTime > 5 then
-                timer:SetTextColor(0, 1, 0)  
-            elseif remainingTime > 2 then
-                timer:SetTextColor(1, 1, 0)  
+        if timerPosition ~= "NONE" then  -- Only show the timer if it's not set to "NONE"
+            if EpicPlates.db.profile.colorMode == "dynamic" then
+                if remainingTime > 5 then
+                    timer:SetTextColor(0, 1, 0)  
+                elseif remainingTime > 2 then
+                    timer:SetTextColor(1, 1, 0)  
+                else
+                    timer:SetTextColor(1, 0, 0)  
+                end
             else
-                timer:SetTextColor(1, 0, 0)  
+                local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
+                timer:SetTextColor(r, g, b)
             end
+
+            timer:SetText(string.format("%.1f", remainingTime))
+            timer:Show()
         else
-            local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
-            timer:SetTextColor(r, g, b)
+            timer:Hide()  -- Hide the timer if "NONE" is selected
         end
-        
-        timer:SetText(string.format("%.1f", remainingTime))
-        timer:Show()
 
         icon:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -895,6 +905,7 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
         icon:Hide()
     end
 end
+
 
 -- Script to handle various events and apply updates accordingly
 EpicPlates.Events = CreateFrame("Frame")
