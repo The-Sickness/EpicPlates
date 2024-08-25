@@ -193,7 +193,7 @@ timerPosition = {
     values = {
         BELOW = "Below Icon",
         MIDDLE = "Center of Icon",
-        NONE = "No Timers",  -- Add this line
+        NONE = "No Timers",  -- Added this line
     },
     order = 14,
     get = function() 
