@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.0 - 11.0.2
+-- v1.1 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -186,22 +186,23 @@ local options = {
                 return EpicPlates.db.profile.colorMode == "dynamic"
             end,
         },
-        timerPosition = {
-            type = 'select',
-            name = "Timer Position",
-            desc = "|cFFDA70D6Select the position|r for the timer text on the icons. You can choose to display the timer below the icon or center it within the icon itself, depending on which option provides better visibility and fits your overall UI layout.",
-            values = {
-                BELOW = "Below Icon",
-                MIDDLE = "Center of Icon",
-            },
-            order = 14,
-            get = function() 
-                return EpicPlates.db.profile.timerPosition 
-            end,
-            set = function(_, value) 
-                EpicPlates.db.profile.timerPosition = value
-                EpicPlates:UpdateIconSize()  
-            end,
+timerPosition = {
+    type = 'select',
+    name = "Timer Position",
+    desc = "|cFFDA70D6Select the position|r for the timer text on the icons. You can choose to display the timer below the icon, center it within the icon itself, or hide the timer entirely.",
+    values = {
+        BELOW = "Below Icon",
+        MIDDLE = "Center of Icon",
+        NONE = "No Timers",  -- Add this line
+    },
+    order = 14,
+    get = function() 
+        return EpicPlates.db.profile.timerPosition 
+    end,
+    set = function(_, value) 
+        EpicPlates.db.profile.timerPosition = value
+        EpicPlates:UpdateIconSize()  
+    end,
         },
 
         -- Minimap Icon Settings
