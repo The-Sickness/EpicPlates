@@ -204,9 +204,7 @@ end
 function EpicPlates:NAME_PLATE_UNIT_REMOVED(_, unit)
     local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
     if nameplate and nameplate.UnitFrame then
-        self:NiceNameplateInfo_Update(unit)
-        self:NiceNameplateFrames_Update(unit)
-        self:UpdateHealthBarWithPercent(unit)  
+        self:ClearAuras(nameplate.UnitFrame)
     end
 end
 
@@ -219,9 +217,11 @@ function EpicPlates:UNIT_THREAT_LIST_UPDATE(_, unit)
 end
 
 function EpicPlates:UpdateAllAuras()
+    local currentTime = GetTime()
     for _, NamePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = NamePlate.UnitFrame
         if UnitFrame and UnitFrame.unit then
+            self:ClearExpiredAuras(UnitFrame, currentTime)
             self:UpdateAuras(UnitFrame.unit)
             self:UpdateHealthBarWithPercent(UnitFrame.unit)  
         end
@@ -262,7 +262,11 @@ function EpicPlates:UpdateAllNameplates()
 end
 
 function EpicPlates:PLAYER_TARGET_CHANGED()
-    self:UpdateAllNameplates()
+    local targetFrame = C_NamePlate.GetNamePlateForUnit("target")
+    if targetFrame then
+        self:ClearAuras(targetFrame.UnitFrame)
+        self:UpdateAllNameplates()
+    end
 end
 
 -- Disable default buffs/debuffs on the nameplate
@@ -393,7 +397,6 @@ function EpicPlates:UpdateIconPositions()
             local iconXOffset = self.db.profile.iconXOffset or 0
             local iconYOffset = self.db.profile.iconYOffset or 0
 
-            -- Adjust Buff Icons
             for i = 1, #UnitFrame.buffIcons do
                 local icon = UnitFrame.buffIcons[i].icon
                 local timer = UnitFrame.buffIcons[i].timer
@@ -422,7 +425,6 @@ function EpicPlates:UpdateIconPositions()
                 timer:Show()
             end
 
-            -- Adjust Debuff Icons (same logic as above)
             for i = 1, #UnitFrame.debuffIcons do
                 local icon = UnitFrame.debuffIcons[i].icon
                 local timer = UnitFrame.debuffIcons[i].timer
@@ -475,7 +477,7 @@ function EpicPlates:UpdateIconSize()
     local timerFontSize = self.db.profile.timerFontSize
     local timerFont = LSM:Fetch("font", self.db.profile.timerFont)  
     local timerFontColor = self.db.profile.timerFontColor or {1, 1, 1} 
-    local timerPosition = self.db.profile.timerPosition  -- Get the timer position
+    local timerPosition = self.db.profile.timerPosition  
 
     for _, namePlate in pairs(C_NamePlate.GetNamePlates()) do
         local UnitFrame = namePlate.UnitFrame
@@ -516,7 +518,6 @@ function EpicPlates:UpdateIconSize()
         end
     end
 end
-
 
 -- Setup options after ensuring the options table is defined
 function EpicPlates:SetupOptions()
@@ -670,7 +671,7 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     UnitFrame.debuffIcons = {}
 
     local iconSize = self.db.profile.iconSize
-    local rowSpacing = 14  -- Space between rows
+    local rowSpacing = 14  
 
     local iconXOffset = self.db.profile.iconXOffset or 0
     local iconYOffset = self.db.profile.iconYOffset or 0
@@ -678,7 +679,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
     local buffIconPos = self.db.profile.buffIconPositions or { y = 0, x = 0 }
     local debuffIconPos = self.db.profile.debuffIconPositions or { y = 0, x = 0 }
 
-    -- Create Buff Icons
     for i = 1, MAX_BUFFS do
         local icon = UnitFrame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(iconSize, iconSize)
@@ -699,15 +699,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
-        icon:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HELPFUL")
-            GameTooltip:Show()
-        end)
-        icon:SetScript("OnLeave", function(self)
-            GameTooltip:Hide()
-        end)
-
         UnitFrame.buffIcons[i] = {
             icon = icon,
             timer = timer
@@ -716,7 +707,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         icon:Show()
     end
 
-    -- Create Debuff Icons
     for i = 1, MAX_DEBUFFS do
         local icon = UnitFrame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(iconSize, iconSize)
@@ -736,15 +726,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetFontObject(SystemFont_Outline_Small)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
-
-        icon:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HARMFUL")
-            GameTooltip:Show()
-        end)
-        icon:SetScript("OnLeave", function(self)
-            GameTooltip:Hide()
-        end)
 
         UnitFrame.debuffIcons[i] = {
             icon = icon,
@@ -801,51 +782,41 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitFrame then return end
 
+    self:ClearAuras(UnitFrame)
+    
     if not UnitIsUnit("target", unit) and not UnitIsUnit("mouseover", unit) then
-        for i = 1, MAX_BUFFS do
-            if UnitFrame.buffIcons[i] then
-                UnitFrame.buffIcons[i].icon:Hide()
-                UnitFrame.buffIcons[i].timer:Hide()
-            end
-        end
-        for i = 1, MAX_DEBUFFS do
-            if UnitFrame.debuffIcons[i] then
-                UnitFrame.debuffIcons[i].icon:Hide()
-                UnitFrame.debuffIcons[i].timer:Hide()
-            end
-        end
-        return
+        return 
     end
 
     local buffIndex = 1
     local debuffIndex = 1
     local currentTime = GetTime()
+    local activeAuras = {}
 
-    -- Buffs
     for i = 1, 40 do
         local aura = C_UnitAuras.GetBuffDataByIndex(unit, i)
         if not aura or buffIndex > MAX_BUFFS then break end
 
-        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
-            aura.index = i  
+        if not activeAuras[aura.spellId] and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+            aura.index = i
             self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)
+            activeAuras[aura.spellId] = true
             buffIndex = buffIndex + 1
         end
     end
 
-    -- Debuffs
     for i = 1, 40 do
         local aura = C_UnitAuras.GetDebuffDataByIndex(unit, i)
         if not aura or debuffIndex > MAX_DEBUFFS then break end
 
-        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
-            aura.index = i  
+        if not activeAuras[aura.spellId] and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+            aura.index = i
             self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)
+            activeAuras[aura.spellId] = true
             debuffIndex = debuffIndex + 1
         end
     end
 
-    -- Hide unused icons
     for i = buffIndex, MAX_BUFFS do
         if UnitFrame.buffIcons[i] then
             UnitFrame.buffIcons[i].icon:Hide()
@@ -861,35 +832,73 @@ function EpicPlates:UpdateAuras(unit)
     end
 end
 
+-- Function to check if an aura already exists on a specific unit frame
+function EpicPlates:FindExistingAura(UnitFrame, spellId)
+    if not UnitFrame.auras then
+        UnitFrame.auras = {}
+    end
+    return UnitFrame.auras[spellId] or false
+end
+
+-- Function to store an aura's spell ID to prevent duplicates
+function EpicPlates:StoreAura(UnitFrame, spellId)
+    if not UnitFrame.auras then
+        UnitFrame.auras = {}
+    end
+    UnitFrame.auras[spellId] = true
+end
+
+function EpicPlates:ClearAuras(UnitFrame)
+    if UnitFrame and UnitFrame.auras then
+        for spellId in pairs(UnitFrame.auras) do
+            UnitFrame.auras[spellId] = nil
+        end
+    end
+
+    if UnitFrame.buffIcons then
+        for _, iconTable in ipairs(UnitFrame.buffIcons) do
+            iconTable.icon:Hide()
+            iconTable.timer:Hide()
+        end
+    end
+    if UnitFrame.debuffIcons then
+        for _, iconTable in ipairs(UnitFrame.debuffIcons) do
+            iconTable.icon:Hide()
+            iconTable.timer:Hide()
+        end
+    end
+end
+
 function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     local icon = iconTable.icon
     local timer = iconTable.timer
-    local timerPosition = self.db.profile.timerPosition  -- Get the timer position
+
+    if self:FindExistingAura(UnitFrame, aura.spellId) then
+        return
+    end
+
+    self:StoreAura(UnitFrame, aura.spellId, aura.expirationTime)
 
     icon:SetTexture(aura.icon)
     icon:Show()
 
     local remainingTime = aura.expirationTime - currentTime
     if remainingTime > 0 and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, remainingTime) then
-        if timerPosition ~= "NONE" then  -- Only show the timer if it's not set to "NONE"
-            if EpicPlates.db.profile.colorMode == "dynamic" then
-                if remainingTime > 5 then
-                    timer:SetTextColor(0, 1, 0)  
-                elseif remainingTime > 2 then
-                    timer:SetTextColor(1, 1, 0)  
-                else
-                    timer:SetTextColor(1, 0, 0)  
-                end
+        if EpicPlates.db.profile.colorMode == "dynamic" then
+            if remainingTime > 5 then
+                timer:SetTextColor(0, 1, 0)  -- Green
+            elseif remainingTime > 2 then
+                timer:SetTextColor(1, 1, 0)  -- Yellow
             else
-                local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
-                timer:SetTextColor(r, g, b)
+                timer:SetTextColor(1, 0, 0)  -- Red
             end
-
-            timer:SetText(string.format("%.1f", remainingTime))
-            timer:Show()
         else
-            timer:Hide()  -- Hide the timer if "NONE" is selected
+            local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
+            timer:SetTextColor(r, g, b)
         end
+
+        timer:SetText(string.format("%.1f", remainingTime))
+        timer:Show()
 
         icon:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -906,6 +915,26 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     end
 end
 
+function EpicPlates:StoreAura(UnitFrame, spellId, expirationTime)
+    if not UnitFrame.auras then
+        UnitFrame.auras = {}
+    end
+    UnitFrame.auras[spellId] = expirationTime
+end
+
+function EpicPlates:ClearExpiredAuras(UnitFrame, currentTime)
+    if not UnitFrame.auras then return end
+    for spellId, expirationTime in pairs(UnitFrame.auras) do
+        if currentTime > expirationTime then
+            UnitFrame.auras[spellId] = nil
+        end
+    end
+end
+
+function EpicPlates:OnNameplateRemoved(UnitFrame)
+    self:ClearAuras(UnitFrame)
+    
+end
 
 -- Script to handle various events and apply updates accordingly
 EpicPlates.Events = CreateFrame("Frame")
