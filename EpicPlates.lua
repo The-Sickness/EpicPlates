@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.1 - 11.0.2
+-- v1.0 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -22,7 +22,6 @@ local BUFFS_PER_LINE        = 8
 local DEBUFFS_PER_LINE      = 8 
 local MAX_ROWS = 3  
 local LINE_SPACING_Y        = 9 
-local ActiveAuras = {}
 
 if not EpicPlates then
     EpicPlates = LibStub('AceAddon-3.0'):NewAddon('EpicPlates', 'AceHook-3.0', 'AceEvent-3.0', 'AceTimer-3.0')
@@ -58,8 +57,9 @@ function EpicPlates:OnEnable()
     self:RegisterEvent('NAME_PLATE_UNIT_REMOVED')
     self:RegisterEvent('UNIT_THREAT_LIST_UPDATE')
 	self:RegisterEvent("PLAYER_TARGET_CHANGED")
-	self:RegisterEvent('UPDATE_MOUSEOVER_UNIT')
-	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	self:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')
+	self:RegisterEvent('UNIT_AURA', 'UNIT_AURA')
+	self:RegisterEvent('UNIT_AURA')
 
     if not self:IsHooked('CompactUnitFrame_UpdateName') then
         self:SecureHook('CompactUnitFrame_UpdateName')
@@ -69,6 +69,68 @@ function EpicPlates:OnEnable()
 
     self:DisableDefaultBuffsDebuffs()
 end
+
+function EpicPlates:COMBAT_LOG_EVENT_UNFILTERED()
+    local timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, 
+          destGUID, destName, destFlags, destRaidFlags, spellId, spellName, spellSchool = CombatLogGetCurrentEventInfo()
+
+    -- Only process relevant events
+    if eventType == "SPELL_AURA_APPLIED" or eventType == "SPELL_AURA_REFRESH" then
+        local unit = self:GetUnitByGUID(destGUID)
+        if unit then
+            self:HandleAuraApplied(unit, spellId)
+        end
+    elseif eventType == "SPELL_AURA_REMOVED" then
+        local unit = self:GetUnitByGUID(destGUID)
+        if unit then
+            self:HandleAuraRemoved(unit, spellId)
+        end
+    end
+end
+
+function EpicPlates:GetUnitByGUID(guid)
+    -- This function should return the unit ID (like "target", "focus", etc.) based on the GUID.
+    -- You can iterate through known unit IDs to find the matching one.
+    for _, unit in ipairs({"target", "focus", "mouseover", "nameplate1", "nameplate2", "nameplate3", "nameplate4", "nameplate5"}) do
+        if UnitGUID(unit) == guid then
+            return unit
+        end
+    end
+    return nil
+end
+
+function EpicPlates:HandleAuraApplied(unit, spellId)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if not nameplate then return end
+
+    -- Clear expired auras
+    local currentTime = GetTime()
+    self:ClearExpiredAuras(nameplate.UnitFrame, currentTime)
+
+    -- Store the aura in the unit's aura table
+    self:StoreAura(nameplate.UnitFrame, spellId)
+
+    -- Update the unit's auras
+    self:UpdateAuras(unit)
+end
+
+function EpicPlates:HandleAuraRemoved(unit, spellId)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if not nameplate then return end
+
+    -- Remove the aura from the unit's aura table
+    if nameplate.UnitFrame.auras then
+        nameplate.UnitFrame.auras[spellId] = nil
+    end
+
+    -- Update the unit's auras
+    self:UpdateAuras(unit)
+end
+
+function EpicPlates:UNIT_AURA(event, unitTarget)
+    self:UpdateAuras(unitTarget)
+end
+
 
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
@@ -100,18 +162,6 @@ local EpicPlatesLDB = LibStub("LibDataBroker-1.1"):NewDataObject("EpicPlates", {
     end,
 })
 
-local function CacheAuras()
-    cachedAuras = {}
-    local db = EpicPlates.db  -- Correctly accessing the addon database
-    if db and db.Auras then
-        for spellId, auraData in pairs(db.Auras) do
-            if auraData.name then
-                cachedAuras[auraData.name] = spellId
-            end
-        end
-    end
-end
-
 function EpicPlates:OnInitialize()
     self.db = LibStub("AceDB-3.0"):New("EpicPlatesDB", {
         profile = {
@@ -132,9 +182,6 @@ function EpicPlates:OnInitialize()
             }
         }
     }, true)
-
-    -- Call CacheAuras after initializing the database
-    CacheAuras()
 
     if not _G.defaultSpells1 or not _G.defaultSpells2 then
     else
@@ -161,62 +208,6 @@ function EpicPlates:OnInitialize()
     end)
 
     self:ApplyTextureToAllNameplates()  
-end
-
-function EpicPlates:COMBAT_LOG_EVENT_UNFILTERED()
-    local timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, 
-          destGUID, destName, destFlags, destRaidFlags, spellId, spellName, spellSchool = CombatLogGetCurrentEventInfo()
-
-    -- Only process relevant events
-    if eventType == "SPELL_AURA_APPLIED" or eventType == "SPELL_AURA_REFRESH" then
-        local unit = self:GetUnitByGUID(destGUID)
-        if unit then
-            self:HandleAuraApplied(unit, spellId)
-        end
-    elseif eventType == "SPELL_AURA_REMOVED" then
-        local unit = self:GetUnitByGUID(destGUID)
-        if unit then
-            self:HandleAuraRemoved(unit, spellId)
-        end
-    end
-end
-
-function EpicPlates:HandleAuraApplied(unit, spellId)
-    local UnitFrame = C_NamePlate.GetNamePlateForUnit(unit) and C_NamePlate.GetNamePlateForUnit(unit).UnitFrame
-    if not UnitFrame then return end
-
-    -- Clear expired auras
-    local currentTime = GetTime()
-    self:ClearExpiredAuras(UnitFrame, currentTime)
-
-    -- Store the aura in the unit's aura table
-    self:StoreAura(UnitFrame, spellId)
-
-    -- Update the unit's auras
-    self:UpdateAuras(unit)
-end
-
-function EpicPlates:HandleAuraRemoved(unit, spellId)
-    local UnitFrame = C_NamePlate.GetNamePlateForUnit(unit) and C_NamePlate.GetNamePlateForUnit(unit).UnitFrame
-    if not UnitFrame then return end
-
-    -- Remove the aura from the unit's aura table
-    if UnitFrame.auras then
-        UnitFrame.auras[spellId] = nil
-    end
-
-    -- Update the unit's auras
-    self:UpdateAuras(unit)
-end
-
-
-function EpicPlates:GetUnitByGUID(guid)
-    for _, unit in ipairs({"target", "focus", "mouseover", "nameplate1", "nameplate2", "nameplate3", "nameplate4", "nameplate5"}) do
-        if UnitGUID(unit) == guid then
-            return unit
-        end
-    end
-    return nil
 end
 
 function EpicPlates:ApplyTextureToAllNameplates()
@@ -275,15 +266,12 @@ function EpicPlates:NAME_PLATE_UNIT_ADDED(_, unit)
     end
 end
 
--- Clear auras when nameplate is removed
 function EpicPlates:NAME_PLATE_UNIT_REMOVED(_, unit)
-    local UnitFrame = C_NamePlate.GetNamePlateForUnit(unit).UnitFrame
-    if UnitFrame then
-        self:ClearAuras(UnitFrame)
-        local unitGUID = UnitGUID(unit)
-        if ActiveAuras[unitGUID] then
-            ActiveAuras[unitGUID] = nil
-        end
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if nameplate and nameplate.UnitFrame then
+        self:NiceNameplateInfo_Update(unit)
+        self:NiceNameplateFrames_Update(unit)
+        self:UpdateHealthBarWithPercent(unit)  
     end
 end
 
@@ -304,6 +292,16 @@ function EpicPlates:UpdateAllAuras()
         end
     end
 end
+
+function EpicPlates:ClearExpiredAuras(UnitFrame, currentTime)
+    if not UnitFrame.auras then return end
+    for spellId, expirationTime in pairs(UnitFrame.auras) do
+        if currentTime > expirationTime then
+            UnitFrame.auras[spellId] = nil
+        end
+    end
+end
+
 
 function EpicPlates:UpdateHealthBarWithPercent(unit)
     local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -339,16 +337,19 @@ function EpicPlates:UpdateAllNameplates()
 end
 
 function EpicPlates:PLAYER_TARGET_CHANGED()
-    local targetFrame = C_NamePlate.GetNamePlateForUnit("target")
-    if targetFrame then
-        self:ClearAuras(targetFrame.UnitFrame)
-        self:UpdateAllNameplates()
-    end
-end
-
-function EpicPlates:UPDATE_MOUSEOVER_UNIT()
     self:UpdateAllNameplates()
 end
+
+function EpicPlates:OnPlayerRegenEnabled()
+    -- When the player leaves combat, refresh the nameplates to reflect the new state.
+    self:UpdateAllNameplates()
+end
+
+function EpicPlates:OnPlayerRegenDisabled()
+    -- When the player enters combat, refresh the nameplates to reflect the new state.
+    self:UpdateAllNameplates()
+end
+
 
 -- Disable default buffs/debuffs on the nameplate
 function EpicPlates:DisableDefaultBuffsDebuffs()
@@ -370,6 +371,14 @@ function EpicPlates:DisableDefaultBuffsDebuffs()
 
     f:SetScript("OnEvent", function(self, event, ...) events[event](self, ...) end)
 end
+
+function EpicPlates:StoreAura(UnitFrame, spellId, expirationTime)
+    if not UnitFrame.auras then
+        UnitFrame.auras = {}
+    end
+    UnitFrame.auras[spellId] = expirationTime
+end
+
 
 local function GetUnitProperties(unit)
     local guid = UnitGUID(unit)
@@ -575,10 +584,8 @@ function EpicPlates:UpdateIconSize()
                 timer:ClearAllPoints()
                 if timerPosition == "MIDDLE" then
                     timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                elseif timerPosition == "BELOW" then
-                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
                 else
-                    timer:Hide()  -- Hide the timer if "NONE" is selected
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
                 end
             end
 
@@ -592,10 +599,8 @@ function EpicPlates:UpdateIconSize()
                 timer:ClearAllPoints()
                 if timerPosition == "MIDDLE" then
                     timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                elseif timerPosition == "BELOW" then
-                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
                 else
-                    timer:Hide()  -- Hide the timer if "NONE" is selected
+                    timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
                 end
             end
         end
@@ -783,6 +788,15 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HELPFUL")
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+
         UnitFrame.buffIcons[i] = {
             icon = icon,
             timer = timer
@@ -811,6 +825,15 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetFontObject(SystemFont_Outline_Small)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
+
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HARMFUL")
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
 
         UnitFrame.debuffIcons[i] = {
             icon = icon,
@@ -867,56 +890,63 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitFrame then return end
 
-    -- Only display auras if the unit is your target or under mouseover
-    if not UnitIsUnit(unit, "target") and not UnitIsUnit(unit, "mouseover") then
-        self:ClearAuras(UnitFrame)
+    if not UnitIsUnit("target", unit) and not UnitIsUnit("mouseover", unit) then
+        for i = 1, MAX_BUFFS do
+            if UnitFrame.buffIcons[i] then
+                UnitFrame.buffIcons[i].icon:Hide()
+                UnitFrame.buffIcons[i].timer:Hide()
+            end
+        end
+        for i = 1, MAX_DEBUFFS do
+            if UnitFrame.debuffIcons[i] then
+                UnitFrame.debuffIcons[i].icon:Hide()
+                UnitFrame.debuffIcons[i].timer:Hide()
+            end
+        end
         return
     end
 
+    local buffIndex = 1
+    local debuffIndex = 1
     local currentTime = GetTime()
 
-    -- Clear previous auras
-    self:ClearAuras(UnitFrame)
+-- Buffs
+for i = 1, 40 do
+    local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+    if not aura or buffIndex > MAX_BUFFS then break end
 
-    -- Track active auras to avoid duplicates
-    local activeAuras = {}
-
-    -- Display Buffs
-    for i = 1, 40 do
-        local aura = C_UnitAuras.GetBuffDataByIndex(unit, i, "HELPFUL")
-        if not aura then break end
-
-        if not activeAuras[aura.spellId] and i <= MAX_BUFFS then
-            activeAuras[aura.spellId] = true
-            self:DisplayAura(UnitFrame.buffIcons[i], aura, currentTime, UnitFrame)
-        end
+    if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+        aura.index = i  
+        self:DisplayAura(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)
+        buffIndex = buffIndex + 1
     end
+end
 
-    -- Display Debuffs
-    for i = 1, 40 do
-        local aura = C_UnitAuras.GetDebuffDataByIndex(unit, i, "HARMFUL")
-        if not aura then break end
+-- Debuffs
+for i = 1, 40 do
+    local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+    if not aura or debuffIndex > MAX_DEBUFFS then break end
 
-        if not activeAuras[aura.spellId] and i <= MAX_DEBUFFS then
-            activeAuras[aura.spellId] = true
-            self:DisplayAura(UnitFrame.debuffIcons[i], aura, currentTime, UnitFrame)
-        end
+    if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+        aura.index = i  
+        self:DisplayAura(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)
+        debuffIndex = debuffIndex + 1
     end
 end
 
 
-
-function EpicPlates:ClearAuras(UnitFrame)
-    if UnitFrame.buffIcons then
-        for _, iconTable in ipairs(UnitFrame.buffIcons) do
-            iconTable.icon:Hide()
-            iconTable.timer:Hide()
+    -- Hide unused icons
+    for i = buffIndex, MAX_BUFFS do
+        if UnitFrame.buffIcons[i] then
+            UnitFrame.buffIcons[i].icon:Hide()
+            UnitFrame.buffIcons[i].timer:Hide()
         end
     end
-    if UnitFrame.debuffIcons then
-        for _, iconTable in ipairs(UnitFrame.debuffIcons) do
-            iconTable.icon:Hide()
-            iconTable.timer:Hide()
+
+    for i = debuffIndex, MAX_DEBUFFS do
+        if UnitFrame.debuffIcons[i] then
+            UnitFrame.debuffIcons[i].icon:Hide()
+            UnitFrame.debuffIcons[i].timer:Hide()
         end
     end
 end
@@ -929,84 +959,36 @@ function EpicPlates:DisplayAura(iconTable, aura, currentTime, UnitFrame)
     icon:Show()
 
     local remainingTime = aura.expirationTime - currentTime
-    if remainingTime > 0 then
-        -- Round the remaining time to one decimal place or to an integer
-        if remainingTime < 60 then
-            timer:SetText(string.format("%.1f", remainingTime))  -- One decimal place if under 60 seconds
+    if remainingTime > 0 and not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, remainingTime) then
+        if EpicPlates.db.profile.colorMode == "dynamic" then
+            if remainingTime > 5 then
+                timer:SetTextColor(0, 1, 0)  
+            elseif remainingTime > 2 then
+                timer:SetTextColor(1, 1, 0)  
+            else
+                timer:SetTextColor(1, 0, 0)  
+            end
         else
-            timer:SetText(string.format("%d", remainingTime))  -- No decimal places if over 60 seconds
+            local r, g, b = unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
+            timer:SetTextColor(r, g, b)
         end
+        
+        timer:SetText(string.format("%.1f", remainingTime))
         timer:Show()
+
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:ClearLines()
+            GameTooltip:SetUnitAura(UnitFrame.unit, aura.index, aura.isHarmful and "HARMFUL" or "HELPFUL")
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
     else
         timer:Hide()
+        icon:Hide()
     end
-end
-
-
-
-function EpicPlates:FindExistingAura(UnitFrame, spellId)
-    if not UnitFrame.auras then
-        UnitFrame.auras = {}
-    end
-    return UnitFrame.auras[spellId] or false
-end
-
--- Function to store an aura's spell ID to prevent duplicates
-function EpicPlates:StoreAura(UnitFrame, spellId)
-    if not UnitFrame.auras then
-        UnitFrame.auras = {}
-    end
-    UnitFrame.auras[spellId] = true
-end
-
-function EpicPlates:ClearAuras(UnitFrame)
-    -- Hide all icons
-    if UnitFrame.buffIcons then
-        for _, iconTable in ipairs(UnitFrame.buffIcons) do
-            iconTable.icon:Hide()
-            iconTable.timer:Hide()
-        end
-    end
-    if UnitFrame.debuffIcons then
-        for _, iconTable in ipairs(UnitFrame.debuffIcons) do
-            iconTable.icon:Hide()
-            iconTable.timer:Hide()
-        end
-    end
-end
-
--- Function to clear expired auras and manage the central table
-function EpicPlates:ClearExpiredAuras(UnitFrame, currentTime)
-    local unitGUID = UnitGUID(UnitFrame.unit)
-    if not ActiveAuras[unitGUID] then return end
-
-    for spellID, auraData in pairs(ActiveAuras[unitGUID]) do
-        if currentTime > auraData.expirationTime then
-            ActiveAuras[unitGUID][spellID] = nil
-        end
-    end
-end
-
-
-function EpicPlates:StoreAura(UnitFrame, spellId, expirationTime)
-    if not UnitFrame.auras then
-        UnitFrame.auras = {}
-    end
-    UnitFrame.auras[spellId] = expirationTime
-end
-
-function EpicPlates:ClearExpiredAuras(UnitFrame, currentTime)
-    if not UnitFrame.auras then return end
-    for spellId, expirationTime in pairs(UnitFrame.auras) do
-        if currentTime > expirationTime then
-            UnitFrame.auras[spellId] = nil
-        end
-    end
-end
-
-function EpicPlates:OnNameplateRemoved(UnitFrame)
-    self:ClearAuras(UnitFrame)
-    -- Any additional logic for when a nameplate is removed
 end
 
 -- Script to handle various events and apply updates accordingly
@@ -1022,6 +1004,8 @@ EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
         EpicPlates.Events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
         EpicPlates.Events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
         EpicPlates.Events:RegisterEvent("UNIT_AURA")
+        EpicPlates.Events:RegisterEvent("PLAYER_REGEN_ENABLED")
+        EpicPlates.Events:RegisterEvent("PLAYER_REGEN_DISABLED")
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         local unit = ...
         EpicPlates:NAME_PLATE_UNIT_ADDED(nil, unit)
@@ -1033,5 +1017,10 @@ EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
         if strmatch(unit, "nameplate%d+") then
             EpicPlates:UpdateAuras(unit)
         end
-     end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        EpicPlates:OnPlayerRegenEnabled()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        EpicPlates:OnPlayerRegenDisabled()
+    end
 end)
+
