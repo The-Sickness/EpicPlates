@@ -67,19 +67,10 @@ function EpicPlates:OnEnable()
 
     self:DisableDefaultBuffsDebuffs()
 
-    -- Delay the population of alwaysShow to ensure all Lua files are loaded
     C_Timer.After(1, function()
         self:InitializeAlwaysShow()
     end)
 end
-
-
-local LDB = LibStub("LibDataBroker-1.1")
-local LDBIcon = LibStub("LibDBIcon-1.0")
-
-
-
-
 
 local EpicPlatesLDB = LibStub("LibDataBroker-1.1"):NewDataObject("EpicPlates", {
     type = "launcher",
@@ -705,15 +696,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
 
-        icon:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HELPFUL")
-            GameTooltip:Show()
-        end)
-        icon:SetScript("OnLeave", function(self)
-            GameTooltip:Hide()
-        end)
-
         UnitFrame.buffIcons[i] = {
             icon = icon,
             timer = timer
@@ -742,15 +724,6 @@ function EpicPlates:CreateAuraIcons(UnitFrame)
         timer:SetFontObject(SystemFont_Outline_Small)
         timer:SetPoint("TOP", icon, "BOTTOM", 0, -2)
         timer:Hide()
-
-        icon:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetUnitAura(UnitFrame.unit, i, "HARMFUL")
-            GameTooltip:Show()
-        end)
-        icon:SetScript("OnLeave", function(self)
-            GameTooltip:Hide()
-        end)
 
         UnitFrame.debuffIcons[i] = {
             icon = icon,
@@ -807,7 +780,6 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitFrame then return end
 
-    -- Hide buffs and debuffs if the unit is not the target or mouseover
     if not UnitIsUnit(unit, "target") and not UnitIsUnit(unit, "mouseover") then
         for i = 1, MAX_BUFFS do
             UnitFrame.buffIcons[i].icon:Hide()
@@ -873,7 +845,7 @@ function EpicPlates:HandleAuraDisplay(iconTable, aura, currentTime, UnitFrame)
     icon:Show()
     timer:Show()
 
-    icon:EnableMouse(true) 
+    icon:EnableMouse(true)
 
     iconTable.updateFrame = iconTable.updateFrame or CreateFrame("Frame", nil, UnitFrame)
     iconTable.updateFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -881,11 +853,11 @@ function EpicPlates:HandleAuraDisplay(iconTable, aura, currentTime, UnitFrame)
         if remainingTime > 0 then
             timer:SetText(string.format("%.1f", remainingTime))
             if remainingTime > 5 then
-                timer:SetTextColor(0, 1, 0)  -- Green for > 5 seconds
+                timer:SetTextColor(0, 1, 0)
             elseif remainingTime > 2 then
-                timer:SetTextColor(1, 1, 0)  -- Yellow for 2-5 seconds
+                timer:SetTextColor(1, 1, 0)
             else
-                timer:SetTextColor(1, 0, 0)  -- Red for < 2 seconds
+                timer:SetTextColor(1, 0, 0)
             end
         else
             timer:Hide()
@@ -895,19 +867,26 @@ function EpicPlates:HandleAuraDisplay(iconTable, aura, currentTime, UnitFrame)
     end)
 
     icon:SetScript("OnEnter", function(self)
-        if aura and aura.index and aura.index > 0 then
+        if UnitFrame and UnitFrame.unit and aura and aura.index then
             local filter = aura.isHarmful and "HARMFUL" or "HELPFUL"
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:ClearLines()
-            GameTooltip:SetUnitAura(UnitFrame.unit, aura.index, filter)
-            GameTooltip:Show()
-        else
-            GameTooltip:Hide()
+            local tooltipData = C_TooltipInfo.GetUnitAura(UnitFrame.unit, aura.index, filter)
+            
+            if tooltipData then
+                EpicPlatesTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                EpicPlatesTooltip:ClearLines()
+
+                for _, line in ipairs(tooltipData.lines) do
+                    TooltipUtil.SurfaceArgs(line)
+                    EpicPlatesTooltip:AddLine(line.leftText, line.leftColor.r, line.leftColor.g, line.leftColor.b, true)
+                end
+
+                EpicPlatesTooltip:Show()
+            end
         end
     end)
 
     icon:SetScript("OnLeave", function(self)
-        GameTooltip:Hide()
+        EpicPlatesTooltip:Hide()
     end)
 end
 
