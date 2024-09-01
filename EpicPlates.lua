@@ -57,6 +57,7 @@ function EpicPlates:OnEnable()
     self:RegisterEvent('NAME_PLATE_UNIT_REMOVED')
     self:RegisterEvent('UNIT_THREAT_LIST_UPDATE')
 	self:RegisterEvent("PLAYER_TARGET_CHANGED")
+	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "OnCombatLogEventUnfiltered")
 
     if not self:IsHooked('CompactUnitFrame_UpdateName') then
         self:SecureHook('CompactUnitFrame_UpdateName')
@@ -895,6 +896,41 @@ function EpicPlates:HandleAuraDisplay(iconTable, aura, currentTime, UnitFrame)
     icon:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
+end
+
+function EpicPlates:OnCombatLogEventUnfiltered()
+    local timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
+          destGUID, destName, destFlags, destRaidFlags, spellId, spellName, spellSchool, auraType = CombatLogGetCurrentEventInfo()
+
+    if eventType == "SPELL_AURA_APPLIED" or eventType == "SPELL_AURA_REMOVED" then
+        local unit = self:GetUnitByGUID(destGUID)
+        if unit then
+            if eventType == "SPELL_AURA_APPLIED" then
+                self:HandleAuraApplied(unit, spellId, auraType)
+            elseif eventType == "SPELL_AURA_REMOVED" then
+                self:HandleAuraRemoved(unit, spellId, auraType)
+            end
+        end
+    end
+end
+
+function EpicPlates:GetUnitByGUID(guid)
+    local knownUnits = {"target", "focus", "mouseover", "nameplate1", "nameplate2", "nameplate3", "nameplate4", "nameplate5"}
+
+    for _, unit in ipairs(knownUnits) do
+        if UnitGUID(unit) == guid then
+            return unit
+        end
+    end
+    return nil
+end
+
+function EpicPlates:HandleAuraApplied(unit, spellId, auraType)
+    self:UpdateAuras(unit)
+end
+
+function EpicPlates:HandleAuraRemoved(unit, spellId, auraType)
+    self:UpdateAuras(unit)
 end
 
 -- Script to handle various events and apply updates accordingly
