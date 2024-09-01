@@ -170,21 +170,22 @@ local options = {
             end,
         },
         timerFontColor = {
-            type = 'color',
-            name = "Timer Font Color",
-            desc = "|cFF9932CCustomize the color|r of the timer text displayed on icons. This option is only available when 'Use Fixed Color' is enabled, allowing you to select a color that contrasts well with the icon's background for better readability.",
-            hasAlpha = false,
-            order = 13,
-            get = function()
-                return unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
-            end,
-            set = function(_, r, g, b)
-                EpicPlates.db.profile.timerFontColor = {r, g, b}
-                EpicPlates:UpdateIconSize()
-            end,
-            disabled = function()
-                return EpicPlates.db.profile.colorMode == "dynamic"
-            end,
+    type = 'color',
+    name = "Timer Font Color",
+    desc = "|cFF9932CCustomize the color|r of the timer text displayed on icons. This option is only available when 'Use Fixed Color' is enabled, allowing you to select a color that contrasts well with the icon's background for better readability.",
+    hasAlpha = false,
+    order = 13,
+    get = function()
+        local color = EpicPlates.db.profile.timerFontColor or {1, 1, 1}
+        return color[1], color[2], color[3]
+    end,
+    set = function(_, r, g, b)
+        EpicPlates.db.profile.timerFontColor = {r, g, b}
+        EpicPlates:UpdateIconSize()
+    end,
+    disabled = function()
+        return EpicPlates.db.profile.colorMode == "dynamic"
+    end,
         },
         timerPosition = {
             type = 'select',
