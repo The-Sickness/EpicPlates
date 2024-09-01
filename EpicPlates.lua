@@ -56,8 +56,8 @@ function EpicPlates:OnEnable()
     self:RegisterEvent('NAME_PLATE_UNIT_ADDED')
     self:RegisterEvent('NAME_PLATE_UNIT_REMOVED')
     self:RegisterEvent('UNIT_THREAT_LIST_UPDATE')
-	self:RegisterEvent("PLAYER_TARGET_CHANGED")
-	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "OnCombatLogEventUnfiltered")
+    self:RegisterEvent("PLAYER_TARGET_CHANGED")
+    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", "OnCombatLogEventUnfiltered")
 
     if not self:IsHooked('CompactUnitFrame_UpdateName') then
         self:SecureHook('CompactUnitFrame_UpdateName')
@@ -66,10 +66,20 @@ function EpicPlates:OnEnable()
     self:ScheduleRepeatingTimer("UpdateAllAuras", 0.1)
 
     self:DisableDefaultBuffsDebuffs()
+
+    -- Delay the population of alwaysShow to ensure all Lua files are loaded
+    C_Timer.After(1, function()
+        self:InitializeAlwaysShow()
+    end)
 end
+
 
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
+
+
+
+
 
 local EpicPlatesLDB = LibStub("LibDataBroker-1.1"):NewDataObject("EpicPlates", {
     type = "launcher",
@@ -797,6 +807,7 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitFrame then return end
 
+    -- Hide buffs and debuffs if the unit is not the target or mouseover
     if not UnitIsUnit(unit, "target") and not UnitIsUnit(unit, "mouseover") then
         for i = 1, MAX_BUFFS do
             UnitFrame.buffIcons[i].icon:Hide()
@@ -809,10 +820,6 @@ function EpicPlates:UpdateAuras(unit)
         return
     end
 
-    if not UnitFrame.auras then
-        UnitFrame.auras = {}
-    end
-
     local buffIndex = 1
     local debuffIndex = 1
     local currentTime = GetTime()
@@ -822,10 +829,13 @@ function EpicPlates:UpdateAuras(unit)
         local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, AuraUtil.AuraFilters.Helpful)
         if not aura or buffIndex > MAX_BUFFS then break end
 
-        local auraUpdateType = AuraUtil.ProcessAura(aura, false, false, true, true)
-        if auraUpdateType == AuraUtil.AuraUpdateChangedType.Buff then
-            self:HandleAuraDisplay(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)
-            buffIndex = buffIndex + 1
+        -- Filtering logic to skip certain spells
+        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+            local auraUpdateType = AuraUtil.ProcessAura(aura, false, false, true, true)
+            if auraUpdateType == AuraUtil.AuraUpdateChangedType.Buff then
+                self:HandleAuraDisplay(UnitFrame.buffIcons[buffIndex], aura, currentTime, UnitFrame)
+                buffIndex = buffIndex + 1
+            end
         end
     end
 
@@ -834,10 +844,13 @@ function EpicPlates:UpdateAuras(unit)
         local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, AuraUtil.AuraFilters.Harmful)
         if not aura or debuffIndex > MAX_DEBUFFS then break end
 
-        local auraUpdateType = AuraUtil.ProcessAura(aura, false, true, false, false)
-        if auraUpdateType == AuraUtil.AuraUpdateChangedType.Debuff then
-            self:HandleAuraDisplay(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)
-            debuffIndex = debuffIndex + 1
+        -- Filtering logic to skip certain spells
+        if not IsAuraFiltered(aura.name, aura.spellId, aura.sourceName, aura.expirationTime - currentTime) then
+            local auraUpdateType = AuraUtil.ProcessAura(aura, false, true, false, false)
+            if auraUpdateType == AuraUtil.AuraUpdateChangedType.Debuff then
+                self:HandleAuraDisplay(UnitFrame.debuffIcons[debuffIndex], aura, currentTime, UnitFrame)
+                debuffIndex = debuffIndex + 1
+            end
         end
     end
 
@@ -931,6 +944,28 @@ end
 
 function EpicPlates:HandleAuraRemoved(unit, spellId, auraType)
     self:UpdateAuras(unit)
+end
+
+function EpicPlates:InitializeAlwaysShow()
+   
+    if not self.db.profile.alwaysShow then
+        self.db.profile.alwaysShow = {
+            spellIDs = {},
+            spellNames = {}
+        }
+    end
+
+    if _G.defaultSpells1 then
+        for _, spellID in ipairs(_G.defaultSpells1) do
+            self.db.profile.alwaysShow.spellIDs[spellID] = true
+        end
+    end
+
+    if _G.defaultSpells2 then
+        for _, spellID in ipairs(_G.defaultSpells2) do
+            self.db.profile.alwaysShow.spellIDs[spellID] = true
+        end
+    end
 end
 
 -- Script to handle various events and apply updates accordingly
