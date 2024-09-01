@@ -1,3 +1,5 @@
+-- Made by Sharpedge_Gaming
+-- v1.0 - 11.0.2
 
 _G.defaultSpells1 = {
 
