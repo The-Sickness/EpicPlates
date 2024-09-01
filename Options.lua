@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.1 - 11.0.2
+-- v1.0 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -186,23 +186,22 @@ local options = {
                 return EpicPlates.db.profile.colorMode == "dynamic"
             end,
         },
-timerPosition = {
-    type = 'select',
-    name = "Timer Position",
-    desc = "|cFFDA70D6Select the position|r for the timer text on the icons. You can choose to display the timer below the icon, center it within the icon itself, or hide the timer entirely.",
-    values = {
-        BELOW = "Below Icon",
-        MIDDLE = "Center of Icon",
-        NONE = "No Timers",  -- Added this line
-    },
-    order = 14,
-    get = function() 
-        return EpicPlates.db.profile.timerPosition 
-    end,
-    set = function(_, value) 
-        EpicPlates.db.profile.timerPosition = value
-        EpicPlates:UpdateIconSize()  
-    end,
+        timerPosition = {
+            type = 'select',
+            name = "Timer Position",
+            desc = "|cFFDA70D6Select the position|r for the timer text on the icons. You can choose to display the timer below the icon or center it within the icon itself, depending on which option provides better visibility and fits your overall UI layout.",
+            values = {
+                BELOW = "Below Icon",
+                MIDDLE = "Center of Icon",
+            },
+            order = 14,
+            get = function() 
+                return EpicPlates.db.profile.timerPosition 
+            end,
+            set = function(_, value) 
+                EpicPlates.db.profile.timerPosition = value
+                EpicPlates:UpdateIconSize()  
+            end,
         },
 
         -- Minimap Icon Settings
@@ -280,55 +279,42 @@ timerPosition = {
                 EpicPlates:UpdateAllAuras()
             end,
         },
-removeFilter = {
-    type = 'select',
-    name = "Remove Filter",
-    desc = "|cFFFFD700Select a filter|r to remove from the list. Removing a filter will allow the previously hidden auras to be displayed again on nameplates, which can be useful if your tracking needs change.",
-    order = 21,
-    values = function()
-    local filters = {}
-    local alwaysShow = EpicPlates.db.profile.alwaysShow
-    if alwaysShow then
-        if importantSpells then
-            for _, spellID in ipairs(importantSpells) do
-                local spellInfo = C_Spell.GetSpellInfo(spellID)
-                if spellInfo then
-                    filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
+        removeFilter = {
+            type = 'select',
+            name = "Remove Filter",
+            desc = "|cFFFFD700Select a filter|r to remove from the list. Removing a filter will allow the previously hidden auras to be displayed again on nameplates, which can be useful if your tracking needs change.",
+            order = 21,
+            values = function()
+                local filters = {}
+                local auraFilters = EpicPlates.db.profile.auraFilters
+                if auraFilters then
+                    for spellID in pairs(auraFilters.spellIDs) do
+                        local spellInfo = C_Spell.GetSpellInfo(spellID)
+                        if spellInfo then
+                            filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
+                        end
+                    end
+                    for spellName in pairs(auraFilters.spellNames) do
+                        filters["name_" .. spellName] = "Name: " .. spellName
+                    end
+                    for casterName in pairs(auraFilters.casterNames) do
+                        filters["caster_" .. casterName] = "Caster: " .. casterName
+                    end
                 end
-            end
-        end
-        if semiImportantSpells then
-            for _, spellID in ipairs(semiImportantSpells) do
-                local spellInfo = C_Spell.GetSpellInfo(spellID)
-                if spellInfo then
-                    filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
+                return filters
+            end,
+            set = function(_, value)
+                local prefix, key = value:match("^(%a+)_(.+)$")
+                local auraFilters = EpicPlates.db.profile.auraFilters
+                if prefix == "id" then
+                    auraFilters.spellIDs[tonumber(key)] = nil
+                elseif prefix == "name" then
+                    auraFilters.spellNames[key] = nil
+                elseif prefix == "caster" then
+                    auraFilters.casterNames[key] = nil
                 end
-            end
-        end
-        for spellID in pairs(alwaysShow.spellIDs) do
-            local spellInfo = C_Spell.GetSpellInfo(spellID)
-            if spellInfo then
-                filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
-            end
-        end
-        for spellName in pairs(alwaysShow.spellNames) do
-            filters["name_" .. spellName] = "Name: " .. spellName
-        end
-    end
-    return filters
-    end,
-    set = function(_, value)
-        local prefix, key = value:match("^(%a+)_(.+)$")
-        local auraFilters = EpicPlates.db.profile.auraFilters
-        if prefix == "id" then
-            auraFilters.spellIDs[tonumber(key)] = nil
-        elseif prefix == "name" then
-            auraFilters.spellNames[key] = nil
-        elseif prefix == "caster" then
-            auraFilters.casterNames[key] = nil
-        end
-        EpicPlates:UpdateAllAuras()
-    end,
+                EpicPlates:UpdateAllAuras()
+            end,
         },
 
         -- Always Show Spells
@@ -373,36 +359,32 @@ removeFilter = {
             end,
         },
         removeAlwaysShow = {
-            type = 'select',
-            name = "Remove Always Show Spell",
-            desc = "|cFFDC143CRemove a spell|r from the always show list. This will stop the spell from being displayed on nameplates, which is useful if you no longer need to track it consistently.",
-            order = 25,
-            values = function()
-                local filters = {}
-                local alwaysShow = EpicPlates.db.profile.alwaysShow
-                if alwaysShow then
-                    for spellID in pairs(alwaysShow.spellIDs) do
-                        local spellInfo = C_Spell.GetSpellInfo(spellID)
-                        if spellInfo then
-                            filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
-                        end
-                    end
-                    for spellName in pairs(alwaysShow.spellNames) do
-                        filters["name_" .. spellName] = "Name: " .. spellName
+    type = 'select',
+    name = "Remove Always Show Spell",
+    desc = "|cFFDC143CRemove a spell|r from the always show list. This will stop the spell from being displayed on nameplates, which is useful if you no longer need to track it consistently.",
+    order = 25,
+    values = function()
+        local filters = {}
+        local alwaysShow = EpicPlates.db.profile.alwaysShow
+        if alwaysShow then
+            -- Populate with spell names only, removing the spell ID
+            if alwaysShow.spellIDs and next(alwaysShow.spellIDs) then
+                for spellID in pairs(alwaysShow.spellIDs) do
+                    local spellInfo = C_Spell.GetSpellInfo(spellID)
+                    if spellInfo then
+                        filters[spellID] = spellInfo.name
                     end
                 end
-                return filters
-            end,
-            set = function(_, value)
-                local prefix, key = value:match("^(%a+)_(.+)$")
-                local alwaysShow = EpicPlates.db.profile.alwaysShow
-                if prefix == "id" then
-                    alwaysShow.spellIDs[tonumber(key)] = nil
-                elseif prefix == "name" then
-                    alwaysShow.spellNames[key] = nil
+            end
+
+            if alwaysShow.spellNames and next(alwaysShow.spellNames) then
+                for spellName in pairs(alwaysShow.spellNames) do
+                    filters[spellName] = spellName
                 end
-                EpicPlates:UpdateAllAuras()
-            end,
+            end
+        end
+        return filters
+    end,
         },
 
         -- Aura Settings
