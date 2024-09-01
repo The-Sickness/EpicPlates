@@ -851,14 +851,21 @@ function EpicPlates:HandleAuraDisplay(iconTable, aura, currentTime, UnitFrame)
     iconTable.updateFrame:SetScript("OnUpdate", function(self, elapsed)
         local remainingTime = aura.expirationTime - GetTime()
         if remainingTime > 0 then
-            timer:SetText(string.format("%.1f", remainingTime))
-            if remainingTime > 5 then
-                timer:SetTextColor(0, 1, 0)
-            elseif remainingTime > 2 then
-                timer:SetTextColor(1, 1, 0)
+            -- Set the color of the timer based on the user's setting
+            if EpicPlates.db.profile.colorMode == "dynamic" then
+                if remainingTime > 5 then
+                    timer:SetTextColor(0, 1, 0)  -- Green for > 5 seconds
+                elseif remainingTime > 2 then
+                    timer:SetTextColor(1, 1, 0)  -- Yellow for 2-5 seconds
+                else
+                    timer:SetTextColor(1, 0, 0)  -- Red for < 2 seconds
+                end
             else
-                timer:SetTextColor(1, 0, 0)
+                -- Use the fixed color from the settings
+                local r, g, b = unpack(EpicPlates.db.profile.timerFontColor)
+                timer:SetTextColor(r, g, b)
             end
+            timer:SetText(string.format("%.1f", remainingTime))
         else
             timer:Hide()
             icon:Hide()
