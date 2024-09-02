@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.0 - 11.0.2
+-- v1.1 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -170,22 +170,21 @@ local options = {
             end,
         },
         timerFontColor = {
-    type = 'color',
-    name = "Timer Font Color",
-    desc = "|cFF9932CCustomize the color|r of the timer text displayed on icons. This option is only available when 'Use Fixed Color' is enabled, allowing you to select a color that contrasts well with the icon's background for better readability.",
-    hasAlpha = false,
-    order = 13,
-    get = function()
-        local color = EpicPlates.db.profile.timerFontColor or {1, 1, 1}
-        return color[1], color[2], color[3]
-    end,
-    set = function(_, r, g, b)
-        EpicPlates.db.profile.timerFontColor = {r, g, b}
-        EpicPlates:UpdateIconSize()
-    end,
-    disabled = function()
-        return EpicPlates.db.profile.colorMode == "dynamic"
-    end,
+            type = 'color',
+            name = "Timer Font Color",
+            desc = "|cFF9932CCustomize the color|r of the timer text displayed on icons. This option is only available when 'Use Fixed Color' is enabled, allowing you to select a color that contrasts well with the icon's background for better readability.",
+            hasAlpha = false,
+            order = 13,
+            get = function()
+                return unpack(EpicPlates.db.profile.timerFontColor or {1, 1, 1})
+            end,
+            set = function(_, r, g, b)
+                EpicPlates.db.profile.timerFontColor = {r, g, b}
+                EpicPlates:UpdateIconSize()
+            end,
+            disabled = function()
+                return EpicPlates.db.profile.colorMode == "dynamic"
+            end,
         },
         timerPosition = {
             type = 'select',
@@ -368,19 +367,20 @@ local options = {
         local filters = {}
         local alwaysShow = EpicPlates.db.profile.alwaysShow
         if alwaysShow then
-            -- Populate with spell names only, removing the spell ID
+            -- Check if spellIDs table exists and is not empty
             if alwaysShow.spellIDs and next(alwaysShow.spellIDs) then
                 for spellID in pairs(alwaysShow.spellIDs) do
                     local spellInfo = C_Spell.GetSpellInfo(spellID)
                     if spellInfo then
-                        filters[spellID] = spellInfo.name
+                        filters["id_" .. spellID] = "ID: " .. spellID .. " (" .. spellInfo.name .. ")"
                     end
                 end
             end
 
+            -- Check if spellNames table exists and is not empty
             if alwaysShow.spellNames and next(alwaysShow.spellNames) then
                 for spellName in pairs(alwaysShow.spellNames) do
-                    filters[spellName] = spellName
+                    filters["name_" .. spellName] = "Name: " .. spellName
                 end
             end
         end
