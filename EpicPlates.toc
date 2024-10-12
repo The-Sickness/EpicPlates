@@ -1,7 +1,7 @@
 ## Interface: 110002
 ## Title: EpicPlates
 ## Notes: EpicPlates enhances nameplates with customizable buffs, debuffs, and detailed information for improved gameplay.
-## Version: v.1.1
+## Version: v.1.3
 ## Author: Sharpedge-Gaming
 ## IconTexture: 463489
 ## SavedVariablesPerCharacter: EpicPlatesDB
@@ -23,6 +23,7 @@ libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 libs\AceTimer-3.0\AceTimer-3.0.lua
 libs\LibBabble-SubZone-3.0\lib.xml
+libs\LibButtonGlow-1.0\LibButtonGlow-1.0.lua
 libs\LibSharedMedia-3.0\lib.xml
 libs\AceGUI-3.0-SharedMediaWidgets\widget.xml
 #@end-no-lib-strip@

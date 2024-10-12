@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.1 - 11.0.2
+-- v1.3 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -118,6 +118,19 @@ local options = {
         EpicPlates:PromptReloadUI()
     end,
         },
+		iconGlow = {
+    type = 'toggle',
+    name = "Enable Icon Glow",
+    desc = "|cFFDAA520Toggle this option|r to enable or disable the glowing effect on icons. When enabled, icons will glow when certain conditions (like buffs/debuffs close to expiration) are met. Disabling this option will remove the glow effect from all icons.",
+    order = 9, 
+    get = function()
+        return EpicPlates.db.profile.iconGlowEnabled
+    end,
+    set = function(_, value)
+        EpicPlates.db.profile.iconGlowEnabled = value
+        EpicPlates:UpdateIconSize()  -- Ensure the UI updates when this setting is changed
+    end,
+	},
 
         -- Timer Settings
         timerSettingsHeader = {
