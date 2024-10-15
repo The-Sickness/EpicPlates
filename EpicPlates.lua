@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.3 - 11.0.2
+-- v1.4 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -112,6 +112,94 @@ local racialData = {
 	[85] = { texture = C_Spell.GetSpellTexture(436344), sharedCD = 0 },  --Earthen Alliance
 }
 
+
+local inspectedGUIDs = {}
+local healerSpecs = {
+    [105] = true,   -- Resto Druid
+    [256] = true,   -- Discipline Priest
+    [257] = true,   -- Holy Priest
+    [264] = true,   -- Resto Shaman
+    [65]  = true,   -- Holy Paladin
+    [270] = true,   -- Mistweaver Monk
+    [1468] = true   -- Preservation Evoker
+}
+ 
+local healerClasses = {
+    ["DRUID"] = true,   -- Restoration Druid
+    ["PRIEST"] = true,  -- Discipline/Holy Priest
+    ["PALADIN"] = true, -- Holy Paladin
+    ["SHAMAN"] = true,  -- Restoration Shaman
+    ["MONK"] = true,    -- Mistweaver Monk
+    ["EVOKER"] = true   -- Preservation Evoker
+}
+ 
+local function AddHealerIcon(self, unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if not nameplate then return end
+    if nameplate.HealerIcon then
+        nameplate.HealerIcon:Hide()
+    end
+    local _, class = UnitClass(unit)
+    if not healerClasses[class] then -- only check healing classes
+        return
+    end
+    if UnitIsPlayer(unit) and UnitIsEnemy("player", unit) then
+        -- Request inspection data
+        NotifyInspect(unit)
+        inspectedGUIDs[UnitGUID(unit)] = unit
+    end
+end
+ 
+local function OnInspectReady(self, event, guid)
+    if inspectedGUIDs[guid] then
+        -- Now you can safely call GetInspectSpecialization and handle specID
+        local unit = inspectedGUIDs[guid]
+        local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+        if unit and nameplate then
+            local specID = GetInspectSpecialization(unit)
+			local nameplate = C_NamePlate.GetNamePlateForUnit("target")
+            if specID and healerSpecs[specID] then
+                if not nameplate.HealerIcon then
+                    nameplate.HealerIcon = CreateFrame("Frame", nil, nameplate)
+                    nameplate.HealerIcon:SetSize(30, 30)
+                    nameplate.HealerIcon.Texture = nameplate.HealerIcon:CreateTexture(nil, "OVERLAY")
+                    nameplate.HealerIcon.Texture:SetAllPoints(nameplate.HealerIcon)
+                    nameplate.HealerIcon.Texture:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+                end
+                nameplate.HealerIcon:SetPoint("LEFT", nameplate.UnitFrame.healthBar, "LEFT", -40, 0)
+                nameplate.HealerIcon:Show()
+            else
+                if nameplate.HealerIcon then
+                    nameplate.HealerIcon:Hide()
+                end
+            end
+        end
+        inspectedGUIDs[guid] = nil
+    end
+end
+ 
+-- Register the INSPECT_READY event
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("INSPECT_READY")
+frame:SetScript("OnEvent", OnInspectReady)
+ 
+hooksecurefunc(NamePlateBaseMixin, "OnAdded", AddHealerIcon)
+
+
+
+
+
+
+
+
+-- Function to remove healer icon
+local function RemoveHealerIcon(unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if nameplate and nameplate.HealerIcon then
+        nameplate.HealerIcon:Hide()
+    end
+end
+
 local EpicPlatesLDB = LibStub("LibDataBroker-1.1"):NewDataObject("EpicPlates", {
     type = "launcher",
     text = "EpicPlates",
@@ -207,7 +295,7 @@ local function ShowPvPItem(unit, isRacial)
     end
 
     if isRacial then
-        UnitFrame[frameKey]:SetPoint("RIGHT", UnitFrame, "RIGHT", 45, 0)  
+        UnitFrame[frameKey]:SetPoint("RIGHT", UnitFrame, "RIGHT", 38, 0)  
     else
         if UnitFrame.PvPRacialFrame and UnitFrame.PvPRacialFrame:IsShown() then
             UnitFrame[frameKey]:SetPoint("RIGHT", UnitFrame.PvPRacialFrame, "LEFT", 0, 0)  
@@ -1235,6 +1323,8 @@ function EpicPlates:InitializeAlwaysShow()
     end
 end
 
+
+
 function EpicPlates:OnEnable()
     C_CVar.SetCVar('nameplateShowAll', '1')
     C_CVar.SetCVar('nameplateShowFriends', '0') 
@@ -1371,6 +1461,9 @@ function EpicPlates:IsSemiImportantSpell(spellID)
     return false
 end
 
+
+
+-- Hook into the nameplate event
 EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and (...) == "EpicPlates" then
         EpicPlates:OnEnable()
@@ -1381,15 +1474,28 @@ EpicPlates.Events:SetScript("OnEvent", function(self, event, ...)
         EpicPlates.Events:RegisterEvent("UNIT_AURA")
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         local unit = ...
-        EpicPlates:NAME_PLATE_UNIT_ADDED(nil, unit)
+        -- Validate the unit token before proceeding
+        if unit and UnitIsPlayer(unit) and UnitIsEnemy("player", unit) then
+            -- Call the existing function for nameplate added
+            EpicPlates:NAME_PLATE_UNIT_ADDED(nil, unit)
+            -- Add healer icon detection
+            AddHealerIcon(unit)
+        else
+            
+        end
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         local unit = ...
-        EpicPlates:NAME_PLATE_UNIT_REMOVED(nil, unit)
+        -- Remove healer icon when the unit is removed
+        if unit then
+            EpicPlates:NAME_PLATE_UNIT_REMOVED(nil, unit)
+            RemoveHealerIcon(unit)
+        end
     elseif event == "UNIT_AURA" then
         local unit = ...
         if strmatch(unit, "nameplate%d+") then
             EpicPlates:UpdateAuras(unit)
         end
-     end
+    end
 end)
+
 
