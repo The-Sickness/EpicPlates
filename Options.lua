@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.3 - 11.0.2
+-- v1.5 - 11.0.2
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
