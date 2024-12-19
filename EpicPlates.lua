@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.5 - 11.0.2
+-- v2.0 - 11.0.7
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -45,7 +45,8 @@ EpicPlates.defaults = {
         timerPosition = "BELOW",	
         iconXOffset = 0,   
         iconYOffset = 0,
-        iconGlowEnabled = true,		
+        iconGlowEnabled = true,	
+        alwaysShowAuras = true,		
     },
 }
 
@@ -114,7 +115,7 @@ local racialData = {
 
 local healingSpells = {
     -- Druid (Restoration only)
-    [48438] = true,  -- Wild Growth
+    [132158] = true, -- Nature's Swiftness
     [18562] = true,  -- Swiftmend
     [33763] = true,  -- Lifebloom
     [740] = true,    -- Tranquility
@@ -194,7 +195,7 @@ local function OnInspectReady(self, event, guid)
                 if specID and healerSpecs[specID] then
                     if not nameplate.HealerIcon then
                         nameplate.HealerIcon = CreateFrame("Frame", nil, nameplate)
-                        nameplate.HealerIcon:SetSize(30, 30)
+                        nameplate.HealerIcon:SetSize(28, 28)
                         nameplate.HealerIcon.Texture = nameplate.HealerIcon:CreateTexture(nil, "OVERLAY")
                         nameplate.HealerIcon.Texture:SetAllPoints(nameplate.HealerIcon)
                         nameplate.HealerIcon.Texture:SetTexture("Interface\\BUTTONS\\WHITE8X8")
@@ -581,8 +582,11 @@ function EpicPlates:UpdateAuras(unit)
 
     if not UnitFrame then return end
 
-    -- Hide buffs and debuffs if the unit is not the target or mouseover
-    if not UnitIsUnit(unit, "target") and not UnitIsUnit(unit, "mouseover") then
+    -- Check the configuration option
+    local alwaysShowAuras = self.db.profile.alwaysShowAuras
+
+    -- Hide buffs and debuffs if the unit is not the target or mouseover and alwaysShowAuras is disabled
+    if not alwaysShowAuras and not UnitIsUnit(unit, "target") and not UnitIsUnit(unit, "mouseover") then
         for i = 1, MAX_BUFFS do
             if UnitFrame.buffIcons[i] then
                 UnitFrame.buffIcons[i].icon:Hide()
@@ -768,7 +772,7 @@ end
 function EpicPlates:IsAuraFiltered(spellName, spellID, casterName, remainingTime)
     local filters = self.db.profile.auraFilters
     local alwaysShow = self.db.profile.alwaysShow
-    local thresholdMore = self.db.profile.auraThresholdMore or 0
+    local thresholdMore = self.db.profile.auraThresholdMore or 60
     local thresholdLess = self.db.profile.auraThresholdLess or 60
 
     -- Check if the aura should always be shown based on spellID or spellName
@@ -1431,6 +1435,7 @@ function EpicPlates:OnInitialize()
                 spellNames = {},
                 casterNames = {}
             },
+            alwaysShowAuras = true, -- Ensure this option is included
             alwaysShow = {
                 spellIDs = {},
                 spellNames = {}
@@ -1439,7 +1444,6 @@ function EpicPlates:OnInitialize()
     }, true)
 
     if not self.db then
-        
         return
     end
 

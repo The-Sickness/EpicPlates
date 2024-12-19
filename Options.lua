@@ -1,5 +1,5 @@
 -- Made by Sharpedge_Gaming
--- v1.5 - 11.0.2
+-- v2.0 - 11.0.7
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -215,7 +215,8 @@ local options = {
                 EpicPlates.db.profile.timerPosition = value
                 EpicPlates:UpdateIconSize()  
             end,
-        },
+			},
+			
 
         -- Minimap Icon Settings
         minimapIconHeader = {
@@ -239,6 +240,14 @@ local options = {
                     LDBIcon:Hide("EpicPlates")
                 end
             end,
+			},
+			         alwaysShowAuras = {
+            type = "toggle",
+            name = "Always Show Auras",
+            desc = "Toggle whether auras (buffs and debuffs) are always visible on all nameplates.",
+            order = 17,
+            get = function() return EpicPlates.db.profile.alwaysShowAuras end,
+            set = function(_, value) EpicPlates.db.profile.alwaysShowAuras = value end,
         },
 
         -- Aura Filters
